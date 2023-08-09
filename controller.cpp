@@ -103,31 +103,59 @@ void poseCallback(const nav_msgs::Odometry::ConstPtr &msg)
     Global::measured = true;
 }
 
+vector<VectorXd> createRectangle(double xcenter, double ycenter, double xlength, double ylength, double angRot)
+{
+    double SEP = 0.3;
+    vector<VectorXd> points = {};
+
+    double C = cos(angRot);
+    double S = sin(angRot);
+
+    for (int i = 0; i < round(xlength / SEP); i++)
+        for (int j = 0; j < round(ylength / SEP); j++)
+        {
+            double x = -xlength / 2 + SEP * i;
+            double y = -ylength / 2 + SEP * j;
+            double xmod = C * x - S * y + xcenter;
+            double ymod = -S * x + C * y + ycenter;
+            VectorXd p = VectorXd::Zero(3);
+            p << xmod, ymod, Global::param.constantHeight;
+
+            points.push_back(p);
+        }
+
+    return points;
+}
+
 vector<VectorXd> getLidarPoints(VectorXd position, double radius)
 {
-    double R = 1;
-    double xc = 4;
-    double yc = 0.5;
-    double H = 2;
+    vector<VectorXd> obstacle = {};
 
-    vector<VectorXd> obstacle;
-    for (int i = 0; i <= 6; i++)
-    {
-        double r = R * ((double)i) / 6;
-        int jmax = (i + 1) * 7;
-        for (int j = 0; j < jmax; j++)
-        {
-            double theta = (2 * 3.14) * j / ((double)jmax);
-            // for (int k = 0; k < 100; k++)
-            //{
-            // double h = H * ((double)k) / 100;
+    // double R = 1;
+    // double xc = 4;
+    // double yc = 0.5;
+    // double H = 2;
 
-            VectorXd p = VectorXd::Zero(3);
-            p << xc + r * cos(theta), yc + r * sin(theta), Global::param.constantHeight;
-            obstacle.push_back(p);
-            //}
-        }
-    }
+    // for (int i = 0; i <= 6; i++)
+    // {
+    //     double r = R * ((double)i) / 6;
+    //     int jmax = (i + 1) * 7;
+    //     for (int j = 0; j < jmax; j++)
+    //     {
+    //         double theta = (2 * 3.14) * j / ((double)jmax);
+    //         VectorXd p = VectorXd::Zero(3);
+    //         p << xc + r * cos(theta), yc + r * sin(theta), Global::param.constantHeight;
+    //         obstacle.push_back(p);
+    //     }
+    // }
+    vector<VectorXd> obs1 = createRectangle(4,1.5+  0.7 + 4, 1, 8, 0);
+    vector<VectorXd> obs2 = createRectangle(4,1.5+ -0.7 - 4, 1, 8, 0);
+
+    for (int i = 0; i < obs1.size(); i++)
+        obstacle.push_back(obs1[i]);
+
+    for (int i = 0; i < obs2.size(); i++)
+        obstacle.push_back(obs2[i]);
 
     return obstacle;
 }
@@ -140,7 +168,7 @@ void lowLevelMovement()
 {
     while (ros::ok() && Global::continueAlgorithm)
     {
-        if (Global::measured && Global::firstPlanCreated) 
+        if (Global::measured && Global::firstPlanCreated)
         {
             vector<VectorXd> obsPoints = getLidarPoints(getRobotPose().position, Global::param.sensingRadius);
             CBFCircControllerResult cccr = CBFCircController(getRobotPose(), Global::currentGoalPosition,
@@ -153,7 +181,7 @@ void lowLevelMovement()
             Global::gradSafetyOrientation = cccr.distanceResult.gradSafetyOrientation;
             Global::witnessDistance = cccr.distanceResult.witnessDistance;
 
-            //Send the twist
+            // Send the twist
             setTwist(cccr.linearVelocity, cccr.angularVelocity);
         }
     }
@@ -188,7 +216,7 @@ int main(int argc, char **argv)
 
     ros::Rate rate(100);
 
-    Global::currentGoalPosition << 9, 0, 0;
+    Global::currentGoalPosition << 9, 0, 0.8;
     Global::currentOmega = Matrix3d::Zero();
     std::thread lowLevelMovementThread = thread(lowLevelMovement);
     std::thread replanOmegaThread = thread(replanOmega);
