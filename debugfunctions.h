@@ -32,6 +32,8 @@ namespace CBFCirc
         double gradSafetyOrientation;
         VectorXd witnessDistance;
         vector<VectorXd> currentLidarPoints;
+        VectorXd currentGoalPosition;
+        GenerateManyPathsResult generateManyPathResult;
     };
 
     string getFolderName();

@@ -161,15 +161,25 @@ namespace CBFCirc
         MatrixXd H = 2 * MatrixXd::Identity(3, 3);
         VectorXd f = -2 * ud;
         MatrixXd A = vectorVertStack(dr.gradSafetyPosition, dr.gradSafetyOrientation).transpose();
+        
+
         VectorXd b = VectorXd::Zero(1);
 
-        double bm;
+        double cbfConst;
         if (dr.safety > 0)
-            bm = -param.alphaCBFPositive * (dr.safety);
+            cbfConst = -param.alphaCBFPositive * (dr.safety);
         else
-            bm = -param.alphaCBFNegative * (dr.safety);
+            cbfConst = -param.alphaCBFNegative * (dr.safety);
 
-        b << bm;
+        b << cbfConst;
+
+        //Add circulation is omega != 0
+        if( abs(omega(0,1)) + abs(omega(1,2)) + abs(omega(2,0)) >= VERYSMALLNUMBER)
+        {
+            A = vectorVertStack(A, (omega*dr.gradSafetyPosition).transpose());
+            double circConst = param.maxVelCircBeta*(1-dr.safety/param.safetyMinBeta);
+            b = vectorVertStack(b,circConst);
+        }
 
         VectorXd u = solveQP(H, f, A, b);
 
@@ -192,7 +202,7 @@ namespace CBFCirc
         return cccr;
     }
 
-    GeneratePathResult CBFCircPlanOne(RobotPose startingPose, VectorXd targetPosition,  MapQuerier querier, Matrix3d omega, double maxTime, double reachpointError, Parameters param)
+    GeneratePathResult CBFCircPlanOne(RobotPose startingPose, VectorXd targetPosition, MapQuerier querier, Matrix3d omega, double maxTime, double reachpointError, Parameters param)
     {
         GeneratePathResult gpr;
         RobotPose pose = startingPose;
@@ -212,7 +222,7 @@ namespace CBFCirc
                 pose.orientation += cccr.angularVelocity * param.deltaTimePlanner;
                 time += param.deltaTimePlanner;
                 posePath.push_back(pose);
-                cont = (posePath[posePath.size() - 1].position - targetPosition).norm() >= reachpointError;
+                cont = (posePath[posePath.size() - 1].position - targetPosition).norm() > reachpointError;
             }
             else
             {
@@ -231,6 +241,31 @@ namespace CBFCirc
         gpr.finalError = (posePath[posePath.size() - 1].position - targetPosition).norm();
 
         return gpr;
+    }
+    GenerateManyPathsResult CBFCircPlanMany(RobotPose startingPose, VectorXd targetPosition,  MapQuerier querier, double maxTime, double reachpointError, Parameters param)
+    {
+        GenerateManyPathsResult gmpr;
+
+        gmpr.pathOmega = {posRotZ(), -posRotZ(), Matrix3d::Zero()};
+        gmpr.pathName = {"PZ","NZ","0"};
+        gmpr.pathResults = {};
+        gmpr.atLeastOnePathReached = false;
+
+
+        for (int i = 0; i < gmpr.pathOmega.size(); i++)
+        {
+            GeneratePathResult gpr = CBFCircPlanOne(startingPose, targetPosition, querier, gmpr.pathOmega[i], maxTime, reachpointError, param);
+            gmpr.pathResults.push_back(gpr);
+            gmpr.pathLenghts.push_back(gpr.pathState == GeneratePathState::sucess ? curveLength(gmpr.pathResults[i].path) : VERYBIGNUMBER);
+            gmpr.atLeastOnePathReached = gmpr.atLeastOnePathReached || (gpr.pathState == GeneratePathState::sucess);
+        }
+
+        vector<int> ind = sortGiveIndex(gmpr.pathLenghts);
+
+        gmpr.bestPathSize = gmpr.pathLenghts[ind[0]];
+        gmpr.bestOmega = gmpr.pathOmega[ind[0]];
+
+        return gmpr;
     }
 
 }

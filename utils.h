@@ -62,7 +62,7 @@ namespace CBFCirc
     vector<VectorXd> upsample(vector<VectorXd> points, double dist);
     //VectorXd correctPoint(VectorXd q, vector<VectorXd> (*querier)(VectorXd, double), double h, double sr, int N, double zmin, double zmax);
     bool checkLimitCycleorConvergence(vector<double> t, vector<VectorXd> point, double deltat, double deltad);
-    double curveLength(vector<VectorXd> qc);
+    double curveLength(vector<RobotPose> posePath);
     vector<int> sortGiveIndex(vector<double> val);
     void printVectorsToCSV(ofstream *f, vector<VectorXd> points);
     void printVectorVectorsToCSV(ofstream *f, vector<vector<VectorXd>> points);

@@ -28,6 +28,8 @@ namespace CBFCirc
         double gainTargetController = 0.2;
         double alphaCBFPositive = 0.5;
         double alphaCBFNegative = 0.5;
+        double safetyMinBeta = 0.5;
+        double maxVelCircBeta = 0.5;
         
         double deltaTimePlanner=0.1;
 
@@ -78,6 +80,17 @@ namespace CBFCirc
         double finalError;
     };
 
+    struct GenerateManyPathsResult
+    {
+        vector<GeneratePathResult> pathResults;
+        vector<Matrix3d> pathOmega;
+        vector<string> pathName;
+        vector<double> pathLenghts;
+        bool atLeastOnePathReached;
+        double bestPathSize;
+        Matrix3d bestOmega;
+    };
+
     typedef function<vector<VectorXd>(VectorXd, double)> MapQuerier;
 
 
@@ -85,7 +98,7 @@ namespace CBFCirc
     VectorFieldResult vectorField(VectorXd point, vector<VectorXd> path, double alpha, double percentLengthStop);
     CBFCircControllerResult CBFCircController(RobotPose pose, VectorXd targetPosition, MapQuerier querier, Matrix3d omega, Parameters param);
     GeneratePathResult CBFCircPlanOne(RobotPose startingPose, VectorXd targetPosition,  MapQuerier querier, Matrix3d omega, double maxTime, double reachpointError, Parameters param); 
-   
+    GenerateManyPathsResult CBFCircPlanMany(RobotPose startingPose, VectorXd targetPosition,  MapQuerier querier, double maxTime, double reachpointError, Parameters param);
 
 
 

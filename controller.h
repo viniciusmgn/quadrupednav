@@ -54,6 +54,9 @@ public:
     inline static VectorXd witnessDistance = VectorXd::Zero(3);
     inline static vector<VectorXd> currentLidarPoints = {};
     inline static bool continueAlgorithm = true;
+    inline static VectorXd currentGoalPosition = VectorXd::Zero(3);
+    inline static GenerateManyPathsResult generateManyPathResult;
+    
 
     inline static Parameters param;
     
