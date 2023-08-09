@@ -1,0 +1,88 @@
+    int N = 2000;
+    vector<VectorXd> path;
+    for (int i = 0; i < N; i++)
+    {
+        double theta = i * (2 * 3.14) / ((double)N);
+        VectorXd p = VectorXd::Zero(2);
+        p << 2.5 + 2.5 * cos(theta), 2.5 * sin(theta);
+        path.push_back(p);
+    }   
+   
+   
+   vector<VectorXd> pointTest;
+    for (int k = 0; k < 100; k++)
+    {
+        VectorXd p = randVec(3, -0.5, 0.5);
+        pointTest.push_back(p);
+    }
+
+    double delta = 0.001;
+    Parameters param;
+    param.boundingHeight=1;
+    param.boundingRadius=0.4;
+    param.smoothingParam=0.3;
+
+    for (int k = 0; k < 20; k++)
+    {
+        RobotPose pose;
+        pose.position = randVec(3, -3, 3);
+        pose.orientation = rand(0, 2 * 3.14);
+        DistanceResult dr = computeDist(pointTest, pose, param);
+
+        RobotPose posex;
+        posex.position = VectorXd::Zero(3);
+        posex.position << pose.position[0] + delta, pose.position[1], pose.position[2];
+        posex.orientation = pose.orientation;
+        DistanceResult drx = computeDist(pointTest, posex, param);
+
+        RobotPose posey;
+        posey.position = VectorXd::Zero(3);
+        posey.position << pose.position[0], pose.position[1] + delta, pose.position[2];
+        posey.orientation = pose.orientation;
+        DistanceResult dry = computeDist(pointTest, posey, param);
+
+        RobotPose posez;
+        posez.position = VectorXd::Zero(3);
+        posez.position << pose.position[0], pose.position[1], pose.position[2] + delta;
+        posez.orientation = pose.orientation;
+        DistanceResult drz = computeDist(pointTest, posez, param);
+
+        RobotPose posetheta;
+        posetheta.position = VectorXd::Zero(3);
+        posetheta.position << pose.position[0], pose.position[1], pose.position[2];
+        posetheta.orientation = pose.orientation + delta;
+        DistanceResult drtheta = computeDist(pointTest, posetheta, param);
+
+        VectorXd gradPCalc = VectorXd::Zero(3);
+        gradPCalc << (drx.safety-dr.safety)/delta, (dry.safety-dr.safety)/delta, (drz.safety-dr.safety)/delta;
+        double gradTCalc = (drtheta.safety-dr.safety)/delta;
+
+        ROS_INFO_STREAM("------------");
+        ROS_INFO_STREAM("gradP (ana) = "<<printVector(dr.gradSafetyPosition));
+        ROS_INFO_STREAM("gradP (cal) = "<<printVector(gradPCalc));
+        ROS_INFO_STREAM("gradT (ana) = "<<dr.gradSafetyOrientation);
+        ROS_INFO_STREAM("gradT (cal) = "<<gradTCalc);
+
+
+    }
+
+        while (ros::ok())
+    {
+        ros::spinOnce();
+        VectorFieldResult vfr = vectorField(getPosition(), path, 1.5, 1000);
+        if (Global::generalCounter % 10 == 0)
+        {
+            ROS_INFO_STREAM("----------------");
+            ROS_INFO_STREAM("v = " << printVector(vfr.vector.normalized()));
+            ROS_INFO_STREAM("D = " << vfr.distance);
+        }
+
+        VectorXd v = VectorXd::Zero(2);
+        v << 0.3, 0;
+        setVelocity(0.2 * vfr.vector);
+        // publishVelocity(v);
+
+        Global::generalCounter++;
+
+        rate.sleep();
+    }
