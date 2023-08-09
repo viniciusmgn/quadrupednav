@@ -56,13 +56,14 @@ public:
     inline static bool continueAlgorithm = true;
     inline static VectorXd currentGoalPosition = VectorXd::Zero(3);
     inline static GenerateManyPathsResult generateManyPathResult;
+    inline static Matrix3d currentOmega;
     
 
     inline static Parameters param;
     
 };
 
-// COMMUNICATION FUNCTIONS
+
 
 double getTime();
 RobotPose getRobotPose();

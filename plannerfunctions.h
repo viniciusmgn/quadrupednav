@@ -32,8 +32,11 @@ namespace CBFCirc
         double maxVelCircBeta = 0.5;
         
         double deltaTimePlanner=0.1;
+        double maxTimePlanner=30;
+        double plannerReachError = 0.2;
 
         int freqStoreDebug = 3;
+        int freqReplanPath = 200;
     };
 
     struct DistanceResult
@@ -70,7 +73,8 @@ namespace CBFCirc
     {
         sucess,
         unfeasible,
-        timeout
+        timeout,
+        empty
     };
 
     struct GeneratePathResult
@@ -84,7 +88,6 @@ namespace CBFCirc
     {
         vector<GeneratePathResult> pathResults;
         vector<Matrix3d> pathOmega;
-        vector<string> pathName;
         vector<double> pathLenghts;
         bool atLeastOnePathReached;
         double bestPathSize;
@@ -96,8 +99,9 @@ namespace CBFCirc
 
     DistanceResult computeDist(vector<VectorXd> points, RobotPose pose, Parameters param);
     VectorFieldResult vectorField(VectorXd point, vector<VectorXd> path, double alpha, double percentLengthStop);
-    CBFCircControllerResult CBFCircController(RobotPose pose, VectorXd targetPosition, MapQuerier querier, Matrix3d omega, Parameters param);
+    CBFCircControllerResult CBFCircController(RobotPose pose, VectorXd targetPosition, vector<VectorXd> lidarPoints, Matrix3d omega, Parameters param);
     GeneratePathResult CBFCircPlanOne(RobotPose startingPose, VectorXd targetPosition,  MapQuerier querier, Matrix3d omega, double maxTime, double reachpointError, Parameters param); 
+    double curveLength(vector<RobotPose> posePath);
     GenerateManyPathsResult CBFCircPlanMany(RobotPose startingPose, VectorXd targetPosition,  MapQuerier querier, double maxTime, double reachpointError, Parameters param);
 
 

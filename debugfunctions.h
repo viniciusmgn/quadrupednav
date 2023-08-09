@@ -34,9 +34,11 @@ namespace CBFCirc
         vector<VectorXd> currentLidarPoints;
         VectorXd currentGoalPosition;
         GenerateManyPathsResult generateManyPathResult;
+        Matrix3d currentOmega;
     };
 
     string getFolderName();
+    
     void debug_periodicStore();
     void debug_printAlgStateToMatlab(ofstream *f);
 

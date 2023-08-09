@@ -33,7 +33,7 @@
 #include "controller.h"
 #include "./kdtree-cpp-master/kdtree.hpp"
 #include "./kdtree-cpp-master/kdtree.cpp"
-// #include <thread>
+#include <thread>
 
 using namespace std;
 using namespace Eigen;
@@ -102,7 +102,7 @@ void poseCallback(const nav_msgs::Odometry::ConstPtr &msg)
     Global::measured = true;
 }
 
-vector<VectorXd> getLidarPoints(VectorXd position)
+vector<VectorXd> getLidarPoints(VectorXd position, double radius)
 {
     double R = 1;
     double xc = 4;
@@ -117,14 +117,13 @@ vector<VectorXd> getLidarPoints(VectorXd position)
         for (int j = 0; j < jmax; j++)
         {
             double theta = (2 * 3.14) * j / ((double)jmax);
-            //for (int k = 0; k < 100; k++)
+            // for (int k = 0; k < 100; k++)
             //{
-                //double h = H * ((double)k) / 100;
-                
+            // double h = H * ((double)k) / 100;
 
-                VectorXd p = VectorXd::Zero(3);
-                p << xc + r * cos(theta), yc + r * sin(theta), Global::param.constantHeight;
-                obstacle.push_back(p);
+            VectorXd p = VectorXd::Zero(3);
+            p << xc + r * cos(theta), yc + r * sin(theta), Global::param.constantHeight;
+            obstacle.push_back(p);
             //}
         }
     }
@@ -132,72 +131,36 @@ vector<VectorXd> getLidarPoints(VectorXd position)
     return obstacle;
 }
 
-void computeVelocity(VectorXd pointTarget)
-{
-    vector<VectorXd> lidarPoints = getLidarPoints(getRobotPose().position);
-    DistanceResult dr = computeDist(lidarPoints, getRobotPose(), Global::param);
-
-
-    Global::currentLidarPoints = lidarPoints;
-
-    VectorXd vd3d = -0.2 * (getRobotPose().position - pointTarget);
-    VectorXd vd = VectorXd::Zero(2);
-    vd << vd3d[0], vd3d[1];
-
-
-    Global::distance = dr.distance;
-    Global::safety = dr.safety;
-    Global::gradSafetyPosition = dr.gradSafetyPosition;
-    Global::gradSafetyOrientation = dr.gradSafetyOrientation;
-    Global::witnessDistance = dr.witnessDistance;
-
-    double theta = getRobotPose().orientation;
-    double ctheta = cos(theta);
-    double stheta = sin(theta);
-    Vector2d dir;
-    dir << ctheta, stheta;
-    VectorXd normVelocity = vd.normalized();
-    double wd = 3 * Global::param.gainRobotYaw * (dir[0] * normVelocity[1] - dir[1] * normVelocity[0]);
-
-    VectorXd ud = vectorVertStack(vd, wd);
-
-    MatrixXd H = 2 * MatrixXd::Identity(3, 3);
-    VectorXd f = -2 * ud;
-    MatrixXd A = vectorVertStack(dr.gradSafetyPosition, dr.gradSafetyOrientation).transpose();
-    VectorXd b = VectorXd::Zero(1);
-
-    double bm;
-    if (dr.safety>0)
-        bm = -0.5 * (dr.safety);
-    else
-        bm = -4 * (dr.safety);
-
-    b << bm;
-
-    VectorXd u = solveQP(H, f, A, b);
-    VectorXd v = VectorXd::Zero(3);
-    v << u[0], u[1], 0;
-
-    setTwist(v, u[2]);
-
-    Global::continueAlgorithm = pow((getRobotPose().position - pointTarget).norm(),2)>=0.7*0.7+0.8*0.8;
-
-    ROS_INFO_STREAM("-----------------------");
-
-    ROS_INFO_STREAM("distance = " << dr.distance);
-    ROS_INFO_STREAM("safety = " << dr.safety);
-    ROS_INFO_STREAM("goaldist = " << printVector(getRobotPose().position - pointTarget));
-    ROS_INFO_STREAM("gradSafetyP = " << printVector(dr.gradSafetyPosition));
-    ROS_INFO_STREAM("gradSafetyT = " << dr.gradSafetyOrientation);
-    ROS_INFO_STREAM("linVelocity = " << printVector(v));
-    ROS_INFO_STREAM("angVelocity = " << u[2]);
-}
-
-
-
 // DEBUG FUNCTION
 
 // MAIN FUNCTIONS
+
+void lowLevelMovement()
+{
+    while (true)
+    {
+        if (Global::measured)
+        {
+            Global::currentLidarPoints = getLidarPoints(getRobotPose().position, Global::param.sensingRadius);
+            CBFCircControllerResult cccr = CBFCircController(getRobotPose(), Global::currentGoalPosition,
+                                                             Global::currentLidarPoints, Global::currentOmega, Global::param);
+
+            setTwist(cccr.linearVelocity, cccr.angularVelocity);
+
+            if (Global::generalCounter % 50 == 0)
+            {
+                ROS_INFO_STREAM("---------------------");
+                ROS_INFO_STREAM("linvelocity = " << printVector(cccr.linearVelocity));
+                ROS_INFO_STREAM("angvelocity = " << cccr.angularVelocity);
+                ROS_INFO_STREAM("distobs = " << cccr.distanceResult.distance);
+                ROS_INFO_STREAM("safety = " << cccr.distanceResult.safety);
+                ROS_INFO_STREAM("distgoal = " << (getRobotPose().position - Global::currentGoalPosition).norm());
+                ROS_INFO_STREAM("omega = " << getMatrixName(Global::currentOmega));
+            }
+        }
+    }
+}
+
 int main(int argc, char **argv)
 {
 
@@ -213,20 +176,29 @@ int main(int argc, char **argv)
 
     ros::Rate rate(100);
 
-
     Global::currentGoalPosition << 9, 0, 0;
+    Global::currentOmega = Matrix3d::Zero();
+    std::thread lowLevelMovementThread = thread(lowLevelMovement);
 
     while (ros::ok() && Global::continueAlgorithm)
     {
         ros::spinOnce();
 
         if (Global::measured)
-            computeVelocity(currentGoalPosition);
+        {
+            if (Global::generalCounter % Global::param.freqReplanPath == 0)
+            {
+                Global::generateManyPathResult = CBFCircPlanMany(getRobotPose(), Global::currentGoalPosition, getLidarPoints,
+                                                                 Global::param.maxTimePlanner, Global::param.plannerReachError, Global::param);
+                Global::currentOmega = Global::generateManyPathResult.bestOmega;
+            }
 
+            Global::generalCounter++;
 
-        Global::generalCounter++;
+            debug_periodicStore();
 
-        debug_periodicStore();
+            Global::continueAlgorithm = Global::generalCounter < 3000;
+        }
 
         rate.sleep();
     }

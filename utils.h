@@ -62,10 +62,9 @@ namespace CBFCirc
     vector<VectorXd> upsample(vector<VectorXd> points, double dist);
     //VectorXd correctPoint(VectorXd q, vector<VectorXd> (*querier)(VectorXd, double), double h, double sr, int N, double zmin, double zmax);
     bool checkLimitCycleorConvergence(vector<double> t, vector<VectorXd> point, double deltat, double deltad);
-    double curveLength(vector<RobotPose> posePath);
     vector<int> sortGiveIndex(vector<double> val);
     void printVectorsToCSV(ofstream *f, vector<VectorXd> points);
-    void printVectorVectorsToCSV(ofstream *f, vector<vector<VectorXd>> points);
+    void printVectorVectorsToCSV(ofstream *f, vector<vector<VectorXd>> points, int rowNo);
     void printVectorsToCSV(ofstream *f, vector<double> points);
     bool checkPathFree(VectorXd qa, VectorXd qb, vector<VectorXd> (*querier)(VectorXd, double), double minDist, double lengthStop);
     vector<VectorXd> pointsFreeInRay(VectorXd qc, double R, double r, int N, vector<VectorXd> (*querier)(VectorXd, double), double minDist, double lengthStop);
@@ -75,5 +74,6 @@ namespace CBFCirc
     SafetyResult safetyCylinder(VectorXd point, double radius, double height);
     double signedDistCylinder(VectorXd point, double radius, double height);
     double computeMeanCurv(vector<VectorXd> q, int sampfac, int start, int end);
-
+    string getMatrixName(Matrix3d omega);
+    int getMatrixNumber(Matrix3d omega);
 }

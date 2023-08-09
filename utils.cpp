@@ -300,14 +300,7 @@ namespace CBFCirc
         return false;
     }
 
-    double curveLength(vector<RobotPose> posePath)
-    {
-        double length = 0;
-        for (int i = 0; i < posePath.size() - 1; i++)
-            length += (posePath[i + 1].position - posePath[i].position).norm();
 
-        return length;
-    }
 
     vector<int> sortGiveIndex(vector<double> v)
     {
@@ -345,7 +338,7 @@ namespace CBFCirc
         *f << str << std::endl;
     }
 
-    void printVectorVectorsToCSV(ofstream *f, vector<vector<VectorXd>> points)
+    void printVectorVectorsToCSV(ofstream *f, vector<vector<VectorXd>> points, int rowNo)
     {
         string str;
 
@@ -361,7 +354,7 @@ namespace CBFCirc
             }
 
             str = "";
-            for (int k = 0; k < 3; k++)
+            for (int k = 0; k < rowNo; k++)
                 str += "nan;";
 
             *f << str << std::endl;
@@ -493,4 +486,22 @@ namespace CBFCirc
         }
     }
 
+    string getMatrixName(Matrix3d omega)
+    {
+        if(abs(omega(1, 0)-1) <= VERYSMALLNUMBER)
+            return "PZ";
+        if(abs(omega(1, 0)+1) <= VERYSMALLNUMBER)
+            return "NZ";   
+        if(abs(omega(1, 0)) + abs(omega(2, 1)) + abs(omega(0, 2)) <= VERYSMALLNUMBER)
+            return "0";             
+    }
+    int getMatrixNumber(Matrix3d omega)
+    {
+        if(abs(omega(1, 0)-1) <= VERYSMALLNUMBER)
+            return 2;
+        if(abs(omega(1, 0)+1) <= VERYSMALLNUMBER)
+            return -2;   
+        if(abs(omega(1, 0)) + abs(omega(2, 1)) + abs(omega(0, 2)) <= VERYSMALLNUMBER)
+            return 0;             
+    }
 }
