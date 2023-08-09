@@ -148,8 +148,8 @@ vector<VectorXd> getLidarPoints(VectorXd position, double radius)
     //         obstacle.push_back(p);
     //     }
     // }
-    vector<VectorXd> obs1 = createRectangle(4,1.5+  0.7 + 4, 1, 8, 0);
-    vector<VectorXd> obs2 = createRectangle(4,1.5+ -0.7 - 4, 1, 8, 0);
+    vector<VectorXd> obs1 = createRectangle(4, 1.5 + 0.7 + 4, 1, 8, 0);
+    vector<VectorXd> obs2 = createRectangle(4, 1.5 + -0.7 - 4, 1, 8, 0);
 
     for (int i = 0; i < obs1.size(); i++)
         obstacle.push_back(obs1[i]);
@@ -159,8 +159,6 @@ vector<VectorXd> getLidarPoints(VectorXd position, double radius)
 
     return obstacle;
 }
-
-// DEBUG FUNCTION
 
 // MAIN FUNCTIONS
 
@@ -186,7 +184,6 @@ void lowLevelMovement()
         }
     }
 }
-
 void replanOmega()
 {
     while (ros::ok() && Global::continueAlgorithm)
@@ -200,26 +197,70 @@ void replanOmega()
         }
     }
 }
+void updateGraph()
+{
+    while (ros::ok() && Global::continueAlgorithm)
+    {
+        if (Global::measured && (Global::generalCounter % Global::param.freqUpdateGraph == 0))
+        {
+
+            VectorXd correctedPoint = correctPoint(getRobotPose().position,
+                                                   getLidarPoints(getRobotPose().position, Global::param.sensingRadius), Global::param);
+
+            if (Global::graph.getNeighborNodes(correctedPoint, Global::param.radiusCreateNode).size() == 0)
+            {
+                vector<double> distances;
+                vector<int> indexes;
+                vector<Matrix3d> omegas;
+
+                for (int i = 0; i < Global::graph.nodes.size(); i++)
+                {
+                    RobotPose pose;
+                    pose.position = Global::graph.nodes[i]->position;
+                    pose.orientation = 0;
+
+                    GenerateManyPathsResult gmpr = CBFCircPlanMany(pose, correctedPoint, getLidarPoints,
+                                                                   Global::param.maxTimePlanConnectNode, Global::param);
+                    if (gmpr.atLeastOnePathReached)
+                    {
+                        indexes.push_back(i);
+                        omegas.push_back(gmpr.bestOmega);
+                        distances.push_back(gmpr.bestPathSize);
+                    }
+
+                    if (distances.size() > 0)
+                    {
+                        vector<int> ind = sortGiveIndex(distances);
+                        Node *newNode = Global::graph.addNode(correctedPoint);
+                        Global::graph.connect(Global::graph.nodes[indexes[ind[0]]], newNode, distances[ind[0]], omegas[ind[0]]);
+                    }
+                }
+            }
+        }
+    }
+}
 
 int main(int argc, char **argv)
 {
 
-    // Initialize everything
+    // Initialize ROS variables
     ros::init(argc, argv, "manager");
     ros::NodeHandle nodeHandler;
-
     ros::Publisher aux_pubBodyTwist = nodeHandler.advertise<geometry_msgs::Twist>("/cmd_vel", 1);
     ros::Subscriber subPose = nodeHandler.subscribe("/odom/ground_truth", 1000, poseCallback);
-
-    Global::pubBodyTwist = &aux_pubBodyTwist;
-    Global::startTime = ros::Time::now().toSec();
-
     ros::Rate rate(100);
 
+    // Initialize some global variables
+    Global::pubBodyTwist = &aux_pubBodyTwist;
+    Global::startTime = ros::Time::now().toSec();
     Global::currentGoalPosition << 9, 0, 0.8;
     Global::currentOmega = Matrix3d::Zero();
+    Global::graph.addNode(VectorXd::Zero(3));
+
+    // Initialize some threads
     std::thread lowLevelMovementThread = thread(lowLevelMovement);
     std::thread replanOmegaThread = thread(replanOmega);
+    std::thread updateGraphThread = thread(updateGraph);
 
     while (ros::ok() && Global::continueAlgorithm)
     {
@@ -233,16 +274,33 @@ int main(int argc, char **argv)
             if (Global::generalCounter % 50 == 0)
             {
                 ROS_INFO_STREAM("---------------------");
-                ROS_INFO_STREAM("counter = " << Global::generalCounter);
-                ROS_INFO_STREAM("linvelocity = " << printVector(Global::desLinVelocity));
-                ROS_INFO_STREAM("angvelocity = " << Global::desAngVelocity);
+
+                if (Global::planningState == MotionPlanningState::goingToGlobalGoal)
+                {
+                    ROS_INFO_STREAM("GOING TO GLOBAL TARGET");
+                }
+                if (Global::planningState == MotionPlanningState::pathToExploration)
+                {
+                    ROS_INFO_STREAM("PATH TO EXPLORATION");
+                }
+                if (Global::planningState == MotionPlanningState::goingToExplore)
+                {
+                    ROS_INFO_STREAM("GOING TO EXPLORE");
+                }
+                // ROS_INFO_STREAM("counter = " << Global::generalCounter);
+                // ROS_INFO_STREAM("linvelocity = " << printVector(Global::desLinVelocity));
+                // ROS_INFO_STREAM("angvelocity = " << Global::desAngVelocity);
                 ROS_INFO_STREAM("distobs = " << Global::distance);
                 ROS_INFO_STREAM("safety = " << Global::safety);
                 ROS_INFO_STREAM("distgoal = " << (getRobotPose().position - Global::currentGoalPosition).norm());
                 ROS_INFO_STREAM("omega = " << getMatrixName(Global::currentOmega));
             }
 
-            debug_periodicStore();
+            // DEBUG
+            Global::messages.push_back(std::to_string(Global::generalCounter) + ": periodic storage");
+            debug_Store();
+            // DEBUG
+
             Global::continueAlgorithm = (getRobotPose().position - Global::currentGoalPosition).norm() >= 0.3;
         }
 

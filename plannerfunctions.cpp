@@ -141,10 +141,9 @@ namespace CBFCirc
 
         return dr;
     }
-
-    CBFCircControllerResult CBFCircController(RobotPose pose, VectorXd targetPosition, vector<VectorXd> lidarPoints, Matrix3d omega, Parameters param)
+    CBFCircControllerResult CBFCircController(RobotPose pose, VectorXd targetPosition, vector<VectorXd> neighborPoints, Matrix3d omega, Parameters param)
     {
-        DistanceResult dr = computeDist(lidarPoints, pose, param);
+        DistanceResult dr = computeDist(neighborPoints, pose, param);
 
         VectorXd vd3d = -param.gainTargetController * (pose.position - targetPosition);
         VectorXd vd = VectorXd::Zero(2);
@@ -210,7 +209,6 @@ namespace CBFCirc
 
         return cccr;
     }
-
     GeneratePathResult CBFCircPlanOne(RobotPose startingPose, VectorXd targetPosition, MapQuerier querier, Matrix3d omega, double maxTime, double reachpointError, Parameters param)
     {
         GeneratePathResult gpr;
@@ -251,7 +249,6 @@ namespace CBFCirc
 
         return gpr;
     }
-
     double curveLength(vector<RobotPose> posePath)
     {
         double length = 0;
@@ -260,7 +257,6 @@ namespace CBFCirc
 
         return length;
     }
-
     GenerateManyPathsResult CBFCircPlanMany(RobotPose startingPose, VectorXd targetPosition, MapQuerier querier, double maxTime, double reachpointError, Parameters param)
     {
         GenerateManyPathsResult gmpr;
@@ -284,5 +280,43 @@ namespace CBFCirc
 
         return gmpr;
     }
+    RadialDistanceResult computeDistRadial(vector<VectorXd> points, VectorXd position, double smoothingParam)
+    {
+        RadialDistanceResult rdr;
+        vector<double> halfSqDistance={};
+        vector<VectorXd> distanceVector={};
+  
 
+        for (int i = 0; i < points.size(); i++)
+        {
+            // Transform point
+            halfSqDistance.push_back(0.5*(points[i]-position).squaredNorm());
+            distanceVector.push_back(points[i]-position);
+        }
+
+        SoftSelectMinResult ssmrHalfSqDistance = softSelectMin(3, halfSqDistance, distanceVector, smoothingParam);
+        rdr.halfSqDistance = ssmrHalfSqDistance.softMin;
+        rdr.gradDistance = ssmrHalfSqDistance.selected;
+
+        return rdr;
+    }
+    VectorXd correctPoint(VectorXd point, vector<VectorXd> neighborPoints, Parameters param)
+    {
+
+        int k = 0;
+        VectorXd pointCorrected = point;
+        RadialDistanceResult rdr = computeDistRadial(neighborPoints, pointCorrected, param.smoothingParam);   
+        double currentDist, newDist;
+
+        do
+        {
+            currentDist = rdr.halfSqDistance;
+            pointCorrected += param.stepCorrectPoint * rdr.gradDistance;
+            rdr = computeDistRadial(neighborPoints, pointCorrected, param.smoothingParam);
+            newDist = rdr.halfSqDistance;
+            k++;
+        } while (newDist > currentDist && (k < param.noMaxIterationsCorrectPoint));
+
+        return pointCorrected;
+    }
 }

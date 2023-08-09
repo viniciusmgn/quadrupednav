@@ -34,7 +34,7 @@ namespace CBFCirc
         return str;
     }
 
-    void debug_periodicStore()
+    void debug_Store()
     {
 
         if (Global::firstPlanCreated &&(Global::generalCounter % Global::param.freqStoreDebug == 0))
@@ -45,8 +45,6 @@ namespace CBFCirc
             dfd.timeStamp = getTime();
             dfd.position = getRobotPose().position;
             dfd.orientation = getRobotPose().orientation;
-            dfd.messages = {};
-            dfd.messages.push_back("Periodic storage");
             dfd.desLinVelocity = Global::desLinVelocity;
             dfd.desAngVelocity = Global::desAngVelocity;
             dfd.distance = Global::distance;
@@ -58,6 +56,7 @@ namespace CBFCirc
             dfd.currentGoalPosition = Global::currentGoalPosition;
             dfd.generateManyPathResult = Global::generateManyPathResult;
             dfd.currentOmega = Global::currentOmega;
+            dfd.planningState = Global::planningState;
 
             Global::dataForDebug.push_back(dfd);
         }
@@ -90,6 +89,9 @@ namespace CBFCirc
         *f << "currentGoalPosition = load([dirData '/currentGoalPosition.csv']);" << std::endl;
         *f << "currentLidarPoints = processCell(load([dirData '/currentLidarPoints.csv']));" << std::endl;
         *f << "currentOmega = load([dirData '/currentOmega.csv']);" << std::endl;
+        *f << "planningState = load([dirData '/planningState.csv']);" << std::endl;
+
+        
 
         // Write planned paths
         vector<string> names = {};
@@ -262,6 +264,16 @@ namespace CBFCirc
         tempDouble = {};
         for (int i = 0; i < Global::dataForDebug.size(); i++)
             tempDouble.push_back((double) getMatrixNumber(Global::dataForDebug[i].currentOmega));
+
+        printVectorsToCSV(f, tempDouble);
+        f->flush();
+        f->close();  
+
+        // WRITE: current state of the motion planning
+        f->open("/home/vinicius/Desktop/matlab/unitree_planning/" + fname + "/planningState.csv", ofstream::trunc);
+        tempDouble = {};
+        for (int i = 0; i < Global::dataForDebug.size(); i++)
+            tempDouble.push_back((double) Global::dataForDebug[i].planningState);
 
         printVectorsToCSV(f, tempDouble);
         f->flush();

@@ -27,14 +27,24 @@
 #include "plannerfunctions.cpp"
 #include "debugfunctions.h"
 #include "debugfunctions.cpp"
+#include "graph.h"
+#include "graph.cpp"
 // #include <thread>
-
 
 using namespace std;
 using namespace Eigen;
 using namespace CBFCirc;
 
 // STRUCT AND CLASSES
+
+enum MotionPlanningState
+{
+    pathToExploration,
+    goingToExplore,
+    goingToGlobalGoal,
+    sucess,
+    failure
+};
 
 class Global
 {
@@ -57,15 +67,13 @@ public:
     inline static VectorXd currentGoalPosition = VectorXd::Zero(3);
     inline static GenerateManyPathsResult generateManyPathResult;
     inline static Matrix3d currentOmega;
-    
+    inline static MotionPlanningState planningState = MotionPlanningState::goingToGlobalGoal;
     inline static bool firstPlanCreated = false;
-    
+    inline static vector<string> messages = {};
+    inline static Graph graph;
 
     inline static Parameters param;
-    
 };
-
-
 
 double getTime();
 RobotPose getRobotPose();

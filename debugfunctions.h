@@ -25,7 +25,6 @@ namespace CBFCirc
         double orientation;
         VectorXd desLinVelocity;
         double desAngVelocity;
-        vector<string> messages;
         double distance;
         double safety;
         VectorXd gradSafetyPosition;
@@ -35,11 +34,12 @@ namespace CBFCirc
         VectorXd currentGoalPosition;
         GenerateManyPathsResult generateManyPathResult;
         Matrix3d currentOmega;
+        MotionPlanningState planningState;
     };
 
     string getFolderName();
     
-    void debug_periodicStore();
+    void debug_Store();
     void debug_printAlgStateToMatlab(ofstream *f);
 
 }

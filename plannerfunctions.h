@@ -39,6 +39,12 @@ namespace CBFCirc
 
         int freqStoreDebug = 15;
         int freqReplanPath = 500;
+        int freqUpdateGraph = 500;
+
+        double noMaxIterationsCorrectPoint = 20;
+        double stepCorrectPoint = 0.1;
+        double radiusCreateNode = 0.8;
+        double maxTimePlanConnectNode = 50;
     };
 
     struct DistanceResult
@@ -48,6 +54,11 @@ namespace CBFCirc
         VectorXd gradSafetyPosition;
         double gradSafetyOrientation;
         VectorXd witnessDistance;
+    };
+    struct RadialDistanceResult
+    {
+        double halfSqDistance;
+        VectorXd gradDistance;
     };
 
     struct RobotPose
@@ -101,12 +112,12 @@ namespace CBFCirc
 
     DistanceResult computeDist(vector<VectorXd> points, RobotPose pose, Parameters param);
     VectorFieldResult vectorField(VectorXd point, vector<VectorXd> path, double alpha, double percentLengthStop);
-    CBFCircControllerResult CBFCircController(RobotPose pose, VectorXd targetPosition, vector<VectorXd> lidarPoints, Matrix3d omega, Parameters param);
+    CBFCircControllerResult CBFCircController(RobotPose pose, VectorXd targetPosition, vector<VectorXd> neighborPoints, Matrix3d omega, Parameters param);
     GeneratePathResult CBFCircPlanOne(RobotPose startingPose, VectorXd targetPosition,  MapQuerier querier, Matrix3d omega, double maxTime, double reachpointError, Parameters param); 
     double curveLength(vector<RobotPose> posePath);
     GenerateManyPathsResult CBFCircPlanMany(RobotPose startingPose, VectorXd targetPosition,  MapQuerier querier, double maxTime, double reachpointError, Parameters param);
-
-
+    RadialDistanceResult computeDistRadial(vector<VectorXd> points, VectorXd position, double smoothingParam);
+    VectorXd correctPoint(VectorXd point, vector<VectorXd> neighborPoints, Parameters param);
 
 
 }
