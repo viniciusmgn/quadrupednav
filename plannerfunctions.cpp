@@ -150,17 +150,24 @@ namespace CBFCirc
         VectorXd vd = VectorXd::Zero(2);
         vd << vd3d[0], vd3d[1];
 
-        Vector2d dir;
-        dir << cos(pose.orientation), sin(pose.orientation);
-        VectorXd normVelocity = vd.normalized();
-        double wd = param.gainRobotYaw * (dir[0] * normVelocity[1] - dir[1] * normVelocity[0]);
+        //Vector2d dir;
+        //dir << cos(pose.orientation), sin(pose.orientation);
+        //VectorXd normVelocity = vd.normalized();
+        //double wd = param.gainRobotYaw * (dir[0] * normVelocity[1] - dir[1] * normVelocity[0]);
+        MatrixXd restvw = MatrixXd::Zero(1,3);
+        restvw(0,0) = -param.gainRobotYaw*sin(pose.orientation);
+        restvw(0,1) =  param.gainRobotYaw*cos(pose.orientation);
+        restvw(0,2) =  -1;
+        MatrixXd H1 = MatrixXd::Zero(3,3);
+        H1(0,0)=1;
+        H1(1,1)=1;
+        MatrixXd H2 = restvw.transpose()*restvw;
 
-        VectorXd ud = vectorVertStack(vd, wd);
+        VectorXd ud = vectorVertStack(vd, 0);
 
-        MatrixXd H = 2 * MatrixXd::Identity(3, 3);
+        MatrixXd H = 2 * (H1+H2);
         VectorXd f = -2 * ud;
         MatrixXd A = vectorVertStack(dr.gradSafetyPosition, dr.gradSafetyOrientation).transpose();
-        
 
         VectorXd b = VectorXd::Zero(1);
 
@@ -172,12 +179,12 @@ namespace CBFCirc
 
         b << cbfConst;
 
-        //Add circulation is omega != 0
-        if( abs(omega(0,1)) + abs(omega(1,2)) + abs(omega(2,0)) >= VERYSMALLNUMBER)
-        {   
-            A = matrixVertStack(A, vectorVertStack(omega*dr.gradSafetyPosition,0).transpose());
-            double circConst = param.maxVelCircBeta*(1-dr.safety/param.safetyMinBeta);
-            b = vectorVertStack(b,circConst);
+        // Add circulation is omega != 0
+        if (abs(omega(0, 1)) + abs(omega(1, 2)) + abs(omega(2, 0)) >= VERYSMALLNUMBER)
+        {
+            A = matrixVertStack(A, vectorVertStack(omega * dr.gradSafetyPosition, 0).transpose());
+            double circConst = param.maxVelCircBeta * (1 - dr.safety / param.safetyMinBeta);
+            b = vectorVertStack(b, circConst);
         }
 
         VectorXd u = solveQP(H, f, A, b);
@@ -188,6 +195,9 @@ namespace CBFCirc
 
         if (u.rows() > 0)
         {
+            if (u.norm() >= param.maxTotalVel)
+                u = param.maxTotalVel * u / (u.norm());
+
             cccr.linearVelocity << u[0], u[1], 0;
             cccr.angularVelocity = u[2];
             cccr.feasible = true;
@@ -259,12 +269,11 @@ namespace CBFCirc
         gmpr.pathResults = {};
         gmpr.atLeastOnePathReached = false;
 
-
         for (int i = 0; i < gmpr.pathOmega.size(); i++)
         {
             GeneratePathResult gpr = CBFCircPlanOne(startingPose, targetPosition, querier, gmpr.pathOmega[i], maxTime, reachpointError, param);
             gmpr.pathResults.push_back(gpr);
-            gmpr.pathLenghts.push_back( (gpr.pathState == GeneratePathState::sucess) ? curveLength(gpr.path) : VERYBIGNUMBER);
+            gmpr.pathLenghts.push_back((gpr.pathState == GeneratePathState::sucess) ? curveLength(gpr.path) : VERYBIGNUMBER);
             gmpr.atLeastOnePathReached = gmpr.atLeastOnePathReached || (gpr.pathState == GeneratePathState::sucess);
         }
 

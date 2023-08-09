@@ -20,23 +20,25 @@ namespace CBFCirc
         double boundingRadius = 0.5;
         double boundingHeight = 1.4;
         double smoothingParam = 0.1;
-        double gainRobotYaw = 1.0;
+        
         double constantHeight = 0.8;
         double marginSafety = 0.8;
         double sensingRadius = 3.0;
 
+        double gainRobotYaw = 2.0;
         double gainTargetController = 0.2;
         double alphaCBFPositive = 0.5;
         double alphaCBFNegative = 0.5;
-        double safetyMinBeta = 0.5;
-        double maxVelCircBeta = 0.5;
+        double safetyMinBeta = 0.5; //0.5
+        double maxVelCircBeta = 0.25; //0.5
+        double maxTotalVel = 0.3;
         
         double deltaTimePlanner=0.1;
-        double maxTimePlanner=30;
+        double maxTimePlanner=50;
         double plannerReachError = 0.2;
 
-        int freqStoreDebug = 3;
-        int freqReplanPath = 200;
+        int freqStoreDebug = 15;
+        int freqReplanPath = 500;
     };
 
     struct DistanceResult

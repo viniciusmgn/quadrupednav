@@ -18,7 +18,7 @@
 #include <geometry_msgs/Twist.h>
 #include <nav_msgs/Odometry.h>
 #include <boost/filesystem.hpp>
-
+#include <mutex>
 #include "std_msgs/String.h"
 
 #include "utils.h"
@@ -28,6 +28,7 @@
 #include "debugfunctions.h"
 #include "debugfunctions.cpp"
 // #include <thread>
+
 
 using namespace std;
 using namespace Eigen;
@@ -52,11 +53,12 @@ public:
     inline static VectorXd gradSafetyPosition = VectorXd::Zero(3);
     inline static double gradSafetyOrientation = 0;
     inline static VectorXd witnessDistance = VectorXd::Zero(3);
-    inline static vector<VectorXd> currentLidarPoints = {};
     inline static bool continueAlgorithm = true;
     inline static VectorXd currentGoalPosition = VectorXd::Zero(3);
     inline static GenerateManyPathsResult generateManyPathResult;
     inline static Matrix3d currentOmega;
+    
+    inline static bool firstPlanCreated = false;
     
 
     inline static Parameters param;
@@ -67,3 +69,4 @@ public:
 
 double getTime();
 RobotPose getRobotPose();
+vector<VectorXd> getLidarPoints(VectorXd position, double radius);

@@ -17,6 +17,7 @@ using namespace Eigen;
 #include "plannerfunctions.h"
 #include "utils.h"
 #include "controller.h"
+#include "controller.cpp"
 #include "debugfunctions.h"
 
 namespace CBFCirc
@@ -36,7 +37,7 @@ namespace CBFCirc
     void debug_periodicStore()
     {
 
-        if (Global::generalCounter % Global::param.freqStoreDebug == 0)
+        if (Global::firstPlanCreated &&(Global::generalCounter % Global::param.freqStoreDebug == 0))
         {
             DataForDebug dfd;
 
@@ -53,7 +54,7 @@ namespace CBFCirc
             dfd.gradSafetyPosition = Global::gradSafetyPosition;
             dfd.gradSafetyOrientation = Global::gradSafetyOrientation;
             dfd.witnessDistance = Global::witnessDistance;
-            dfd.currentLidarPoints = Global::currentLidarPoints;
+            dfd.currentLidarPoints = getLidarPoints(getRobotPose().position, Global::param.sensingRadius);
             dfd.currentGoalPosition = Global::currentGoalPosition;
             dfd.generateManyPathResult = Global::generateManyPathResult;
             dfd.currentOmega = Global::currentOmega;
