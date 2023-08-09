@@ -300,11 +300,11 @@ namespace CBFCirc
         return false;
     }
 
-    double curveLength(vector<VectorXd> qc)
+    double curveLength(vector<RobotPose> posePath)
     {
         double length = 0;
-        for (int i = 0; i < qc.size() - 1; i++)
-            length += (qc[i + 1] - qc[i]).norm();
+        for (int i = 0; i < posePath.size() - 1; i++)
+            length += (posePath[i + 1].position - posePath[i].position).norm();
 
         return length;
     }

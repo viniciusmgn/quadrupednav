@@ -171,7 +171,7 @@ void computeVelocity(VectorXd pointTarget)
         bm = -0.5 * (dr.safety);
     else
         bm = -4 * (dr.safety);
-        
+
     b << bm;
 
     VectorXd u = solveQP(H, f, A, b);
@@ -214,16 +214,14 @@ int main(int argc, char **argv)
     ros::Rate rate(100);
 
 
-
-    VectorXd ptarget = VectorXd::Zero(3);
-    ptarget << 9, 0, 0;
+    Global::currentGoalPosition << 9, 0, 0;
 
     while (ros::ok() && Global::continueAlgorithm)
     {
         ros::spinOnce();
 
         if (Global::measured)
-            computeVelocity(ptarget);
+            computeVelocity(currentGoalPosition);
 
 
         Global::generalCounter++;
