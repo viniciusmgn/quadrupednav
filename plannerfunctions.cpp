@@ -142,30 +142,19 @@ namespace CBFCirc
         return dr;
     }
 
-    CBFCircControllerResult CBFCircController(RobotPose startingPose, VectorXd targetPosition, MapQuerier querier, Matrix3d omega, Parameters param)
+    CBFCircControllerResult CBFCircController(RobotPose pose, VectorXd targetPosition, MapQuerier querier, Matrix3d omega, Parameters param)
     {
-        vector<VectorXd> lidarPoints = getLidarPoints(getRobotPose().position);
-        DistanceResult dr = computeDist(lidarPoints, getRobotPose(), Global::param);
+        vector<VectorXd> lidarPoints = querier(pose.position, param.sensingRadius);
+        DistanceResult dr = computeDist(lidarPoints, pose, param);
 
-        Global::currentLidarPoints = lidarPoints;
-
-        VectorXd vd3d = -0.2 * (getRobotPose().position - pointTarget);
+        VectorXd vd3d = -param.gainTargetController * (pose.position - targetPosition);
         VectorXd vd = VectorXd::Zero(2);
         vd << vd3d[0], vd3d[1];
 
-        Global::distance = dr.distance;
-        Global::safety = dr.safety;
-        Global::gradSafetyPosition = dr.gradSafetyPosition;
-        Global::gradSafetyOrientation = dr.gradSafetyOrientation;
-        Global::witnessDistance = dr.witnessDistance;
-
-        double theta = getRobotPose().orientation;
-        double ctheta = cos(theta);
-        double stheta = sin(theta);
         Vector2d dir;
-        dir << ctheta, stheta;
+        dir << cos(pose.orientation), sin(pose.orientation);
         VectorXd normVelocity = vd.normalized();
-        double wd = 3 * Global::param.gainRobotYaw * (dir[0] * normVelocity[1] - dir[1] * normVelocity[0]);
+        double wd = param.gainRobotYaw * (dir[0] * normVelocity[1] - dir[1] * normVelocity[0]);
 
         VectorXd ud = vectorVertStack(vd, wd);
 
@@ -176,29 +165,72 @@ namespace CBFCirc
 
         double bm;
         if (dr.safety > 0)
-            bm = -0.5 * (dr.safety);
+            bm = -param.alphaCBFPositive * (dr.safety);
         else
-            bm = -4 * (dr.safety);
+            bm = -param.alphaCBFNegative * (dr.safety);
 
         b << bm;
 
         VectorXd u = solveQP(H, f, A, b);
-        VectorXd v = VectorXd::Zero(3);
-        v << u[0], u[1], 0;
 
-        setTwist(v, u[2]);
+        CBFCircControllerResult cccr;
+        cccr.distanceResult = dr;
+        cccr.linearVelocity = VectorXd::Zero(3);
 
-        Global::continueAlgorithm = pow((getRobotPose().position - pointTarget).norm(), 2) >= 0.7 * 0.7 + 0.8 * 0.8;
+        if (u.rows() > 0)
+        {
+            cccr.linearVelocity << u[0], u[1], 0;
+            cccr.angularVelocity = u[2];
+            cccr.feasible = true;
+        }
+        else
+        {
+            cccr.angularVelocity = 0;
+            cccr.feasible = false;
+        }
 
-        ROS_INFO_STREAM("-----------------------");
+        return cccr;
+    }
 
-        ROS_INFO_STREAM("distance = " << dr.distance);
-        ROS_INFO_STREAM("safety = " << dr.safety);
-        ROS_INFO_STREAM("goaldist = " << printVector(getRobotPose().position - pointTarget));
-        ROS_INFO_STREAM("gradSafetyP = " << printVector(dr.gradSafetyPosition));
-        ROS_INFO_STREAM("gradSafetyT = " << dr.gradSafetyOrientation);
-        ROS_INFO_STREAM("linVelocity = " << printVector(v));
-        ROS_INFO_STREAM("angVelocity = " << u[2]);
+    GeneratePathResult CBFCircPlanOne(RobotPose startingPose, VectorXd targetPosition,  MapQuerier querier, Matrix3d omega, double maxTime, double reachpointError, Parameters param)
+    {
+        GeneratePathResult gpr;
+        RobotPose pose = startingPose;
+        vector<RobotPose> posePath = {pose};
+        double time = 0;
+        bool cont = true;
+        double dt;
+
+        gpr.pathState = GeneratePathState::sucess;
+
+        while (cont)
+        {
+            CBFCircControllerResult cccr = CBFCircController(pose, targetPosition, querier, omega, param);
+            if (cccr.feasible)
+            {
+                pose.position += cccr.linearVelocity * param.deltaTimePlanner;
+                pose.orientation += cccr.angularVelocity * param.deltaTimePlanner;
+                time += param.deltaTimePlanner;
+                posePath.push_back(pose);
+                cont = (posePath[posePath.size() - 1].position - targetPosition).norm() >= reachpointError;
+            }
+            else
+            {
+                cont = false;
+
+                if (!cccr.feasible)
+                    gpr.pathState = GeneratePathState::unfeasible;
+            }
+            cont = cont && (time < maxTime);
+        }
+
+        if (time >= maxTime)
+            gpr.pathState = GeneratePathState::timeout;
+
+        gpr.path = posePath;
+        gpr.finalError = (posePath[posePath.size() - 1].position - targetPosition).norm();
+
+        return gpr;
     }
 
 }

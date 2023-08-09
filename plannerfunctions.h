@@ -20,10 +20,16 @@ namespace CBFCirc
         double boundingRadius = 0.5;
         double boundingHeight = 1.4;
         double smoothingParam = 0.1;
-        double gainRobotYaw = 0.5;
+        double gainRobotYaw = 1.0;
         double constantHeight = 0.8;
         double marginSafety = 0.8;
+        double sensingRadius = 3.0;
 
+        double gainTargetController = 0.2;
+        double alphaCBFPositive = 0.5;
+        double alphaCBFNegative = 0.5;
+        
+        double deltaTimePlanner=0.1;
 
         int freqStoreDebug = 3;
     };
@@ -54,9 +60,22 @@ namespace CBFCirc
     {
         VectorXd linearVelocity;
         double angularVelocity;
-        double safety;
-        double distance;
+        DistanceResult distanceResult;
         bool feasible;
+    };
+
+    enum GeneratePathState
+    {
+        sucess,
+        unfeasible,
+        timeout
+    };
+
+    struct GeneratePathResult
+    {
+        vector<RobotPose> path;
+        GeneratePathState pathState;
+        double finalError;
     };
 
     typedef function<vector<VectorXd>(VectorXd, double)> MapQuerier;
@@ -65,7 +84,8 @@ namespace CBFCirc
     DistanceResult computeDist(vector<VectorXd> points, RobotPose pose, Parameters param);
     VectorFieldResult vectorField(VectorXd point, vector<VectorXd> path, double alpha, double percentLengthStop);
     CBFCircControllerResult CBFCircController(RobotPose pose, VectorXd targetPosition, MapQuerier querier, Matrix3d omega, Parameters param);
-
+    GeneratePathResult CBFCircPlanOne(RobotPose startingPose, VectorXd targetPosition,  MapQuerier querier, Matrix3d omega, double maxTime, double reachpointError, Parameters param); 
+   
 
 
 
