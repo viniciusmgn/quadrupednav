@@ -43,6 +43,19 @@ namespace CBFCirc
         Edge();
     };
 
+    struct SampleNewTargetResult
+    {
+        vector<VectorXd> points;
+        vector<VectorXd> path;
+        vector<int> index;
+        vector<double> value;
+        VectorXd bestq;
+        double bestValue;
+        int indNode;
+        Matrix3d omega;
+        bool success;
+    };
+
     class Graph
     {
     public:
@@ -55,6 +68,7 @@ namespace CBFCirc
         vector<Node *> getNeighborNodes(VectorXd position, double radius);
         Node *getNearestNode(VectorXd position);
         vector<Node *> getNearestNodeList(VectorXd position);
+        SampleNewTargetResult sampleNewTarget(RobotPose pose, MapQuerier querier, vector<vector<VectorXd>> frontier, Parameters param);
         vector<Edge *> getPath(Node *origin, Node *target);
     };
 

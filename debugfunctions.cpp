@@ -66,6 +66,11 @@ namespace CBFCirc
         }
     }
 
+    void debug_addMessage(string msg)
+    {
+        Global::messages.push_back(std::to_string(Global::generalCounter)+": "+msg);
+    }
+
     void debug_printAlgStateToMatlab(ofstream *f)
     {
 

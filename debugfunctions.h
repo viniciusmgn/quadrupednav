@@ -44,7 +44,6 @@ namespace CBFCirc
     };
 
     string getFolderName();
-    
     void debug_Store();
     void debug_printAlgStateToMatlab(ofstream *f);
 

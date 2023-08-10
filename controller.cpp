@@ -157,8 +157,7 @@ vector<VectorXd> getLidarPoints(VectorXd position, double radius)
 
         for (int i = 0; i < result.size(); ++i)
         {
-            VectorXd ptemp = VectorXd::Zero(3);
-            ptemp << result[i].point[0], result[i].point[1], result[i].point[2];
+            VectorXd ptemp = vec3d(result[i].point[0], result[i].point[1], result[i].point[2]);
             points.push_back(ptemp);
         }
 
@@ -192,6 +191,7 @@ void lowLevelMovement()
         }
     }
 }
+
 void replanOmega()
 {
     while (ros::ok() && Global::continueAlgorithm)
@@ -200,11 +200,20 @@ void replanOmega()
         {
             Global::generateManyPathResult = CBFCircPlanMany(getRobotPose(), Global::currentGoalPosition, getLidarPoints,
                                                              Global::param.maxTimePlanner, Global::param.plannerReachError, Global::param);
+
+            //DEBUG
+            debug_addMessage("Omega replanned!");
+            if((Global::currentOmega-Global::generateManyPathResult.bestOmega).norm())
+                debug_addMessage("Changed sense of circulation");
+
+            //DEBUG
+
             Global::currentOmega = Global::generateManyPathResult.bestOmega;
             Global::firstPlanCreated = true;
         }
     }
 }
+
 void updateGraph()
 {
     while (ros::ok() && Global::continueAlgorithm)
@@ -306,10 +315,9 @@ int main(int argc, char **argv)
     // Initialize some global variables
     Global::pubBodyTwist = &aux_pubBodyTwist;
     Global::startTime = ros::Time::now().toSec();
-    Global::currentGoalPosition << 9, 1, 0.8;
+    Global::currentGoalPosition = Global::param.globalTargetPosition;
     Global::currentOmega = Matrix3d::Zero();
-    VectorXd startingPosition = VectorXd::Zero(3);
-    startingPosition << 0, 0, Global::param.constantHeight;
+    VectorXd startingPosition = vec3d(0, 0, Global::param.constantHeight);
     Global::graph.addNode(startingPosition);
 
     //
@@ -380,7 +388,7 @@ int main(int argc, char **argv)
             }
 
             // DEBUG
-            Global::messages.push_back(std::to_string(Global::generalCounter) + ": periodic storage");
+            debug_addMessage("Periodic storage");
             debug_Store();
             // DEBUG
 

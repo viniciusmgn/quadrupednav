@@ -504,4 +504,11 @@ namespace CBFCirc
         if(abs(omega(1, 0)) + abs(omega(2, 1)) + abs(omega(0, 2)) <= VERYSMALLNUMBER)
             return 0;             
     }
+
+    VectorXd vec3d(double x, double y, double z)
+    {
+        VectorXd vector = VectorXd::Zero(3);
+        vector << x, y, z;
+        return vector;
+    }
 }

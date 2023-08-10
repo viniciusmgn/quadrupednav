@@ -19,71 +19,6 @@ using namespace Eigen;
 
 namespace CBFCirc
 {
-    VectorFieldResult vectorField(VectorXd point, vector<VectorXd> path, double alpha, double percentLengthStop)
-    {
-
-        // Find the closest point in the curve
-        double dmin = VERYBIGNUMBER;
-        double dminTemp;
-        int ind = 0;
-        vector<double> s;
-        s.push_back(0);
-
-        for (int i = 0; i < path.size(); i++)
-        {
-            dminTemp = (path[i] - point).norm();
-            if (dminTemp < dmin)
-            {
-                dmin = dminTemp;
-                ind = i;
-            }
-            if (i > 0)
-                s.push_back(s[s.size() - 1] + (path[i] - path[i - 1]).norm());
-        }
-
-        VectorFieldResult vfr;
-        vfr.distance = dmin;
-        vfr.index = ind;
-
-        if (path.size() < 5)
-        {
-            vfr.vector = 0.2 * (path[path.size() - 1] - point).normalized();
-        }
-        else
-        {
-            VectorXd pi = path[ind];
-
-            // Compute the normal vector
-            VectorXd N = (pi - point) / ((pi - point).norm() + VERYSMALLNUMBER);
-
-            // Compute the tangent vector
-            VectorXd T;
-
-            if (ind == 0)
-                T = (path[1] - path[0]).normalized();
-            else
-                T = (path[ind] - path[ind - 1]).normalized();
-
-            // Compute the G and H gains
-            double G = (2 / M_PI) * atan(alpha * sqrt(dmin));
-            double H = sqrt(1 - (1 - VERYSMALLNUMBER) * G * G);
-
-            // Compute the final vector field:
-            VectorXd v = G * N + H * T;
-
-            // Scale if the curve is open
-            double sCurrent = s[ind];
-            double sMaximum = s[s.size() - 1];
-            double mult;
-
-            // mult = sqrt(abs((1 - (sCurrent - percentLengthStop * sMaximum) / ((1 - percentLengthStop) * sMaximum))));
-            // if (sCurrent > percentLengthStop * sMaximum)
-            //     v = mult * v;
-
-            vfr.vector = v;
-        }
-        return vfr;
-    }
     DistanceResult computeDist(vector<VectorXd> points, RobotPose pose, Parameters param)
     {
         DistanceResult dr;
@@ -96,15 +31,16 @@ namespace CBFCirc
         double x, y, z;
 
         dr.distance = VERYBIGNUMBER;
+        dr.witnessDistance = VectorXd::Zero(3);
 
         for (int i = 0; i < points.size(); i++)
         {
             // Transform point
-            VectorXd pointTrans = VectorXd::Zero(3);
+            
             x = points[i][0] - pose.position[0];
             y = points[i][1] - pose.position[1];
             z = points[i][2] - pose.position[2];
-            pointTrans << cosang * x + sinang * y, -sinang * x + cosang * y, z;
+            VectorXd pointTrans = vec3d(cosang * x + sinang * y, -sinang * x + cosang * y, z);
             SafetyResult sr = safetyCylinder(pointTrans, param.boundingRadius, param.boundingHeight);
 
             // Compute safety
@@ -119,16 +55,15 @@ namespace CBFCirc
             }
 
             // Compute gradient of the safety on position
-            VectorXd gradSafetyPosition = VectorXd::Zero(3);
+            
             x = sr.gradSafety[0];
             y = sr.gradSafety[1];
             z = sr.gradSafety[2];
-            gradSafetyPosition << -(cosang * x - sinang * y), -(sinang * x + cosang * y), -z;
+            VectorXd gradSafetyPosition = vec3d(-(cosang * x - sinang * y), -(sinang * x + cosang * y), -z);
             gradientsPosition.push_back(gradSafetyPosition);
 
             // Compute gradient of the safety on orientation
-            VectorXd pointRotated = VectorXd::Zero(3);
-            pointRotated << pointTrans[1], -pointTrans[0], 0;
+            VectorXd pointRotated = vec3d(pointTrans[1], -pointTrans[0], 0);
             gradientsOrientation.push_back(sr.gradSafety.transpose() * pointRotated);
         }
 
@@ -141,6 +76,7 @@ namespace CBFCirc
 
         return dr;
     }
+
     CBFCircControllerResult CBFCircController(RobotPose pose, VectorXd targetPosition, vector<VectorXd> neighborPoints, Matrix3d omega, Parameters param)
     {
         DistanceResult dr = computeDist(neighborPoints, pose, param);
@@ -214,6 +150,7 @@ namespace CBFCirc
 
         return cccr;
     }
+
     GeneratePathResult CBFCircPlanOne(RobotPose startingPose, VectorXd targetPosition, MapQuerier querier, Matrix3d omega, double maxTime, double reachpointError, Parameters param)
     {
         GeneratePathResult gpr;
@@ -261,6 +198,7 @@ namespace CBFCirc
 
         return gpr;
     }
+
     double curveLength(vector<RobotPose> posePath)
     {
         double length = 0;
@@ -269,6 +207,7 @@ namespace CBFCirc
 
         return length;
     }
+
     GenerateManyPathsResult CBFCircPlanMany(RobotPose startingPose, VectorXd targetPosition, MapQuerier querier, double maxTime, double reachpointError, Parameters param)
     {
         GenerateManyPathsResult gmpr;
@@ -301,6 +240,7 @@ namespace CBFCirc
 
         return gmpr;
     }
+
     RadialDistanceResult computeDistRadial(vector<VectorXd> points, VectorXd position, double smoothingParam)
     {
         RadialDistanceResult rdr;
@@ -320,6 +260,7 @@ namespace CBFCirc
 
         return rdr;
     }
+    
     VectorXd correctPoint(VectorXd point, vector<VectorXd> neighborPoints, Parameters param)
     {
 

@@ -76,4 +76,5 @@ namespace CBFCirc
     double computeMeanCurv(vector<VectorXd> q, int sampfac, int start, int end);
     string getMatrixName(Matrix3d omega);
     int getMatrixNumber(Matrix3d omega);
+    VectorXd vec3d(double x, double y, double z);
 }

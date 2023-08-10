@@ -131,6 +131,138 @@ namespace CBFCirc
         return d;
     }
 
+    SampleNewTargetResult Graph::sampleNewTarget(RobotPose pose, MapQuerier querier, vector<vector<VectorXd>> frontier, Parameters param)
+    {
+
+        SampleNewTargetResult sntr;
+        vector<double> valueUnsorted = {};
+        vector<VectorXd> pointUnsorted = {};
+        vector<int> indexGraphUnsorted = {};
+        vector<Matrix3d> omegaUnsorted = {};
+
+        // Get closest node that can be reached
+        vector<Node *> closestNodesToCurrent = getNearestNodeList(pose.position);
+        Node *closestNodeToPosition;
+        bool found = false;
+        bool triedAll = false;
+        int k = 0;
+
+        do
+        {
+            closestNodeToPosition = closestNodesToCurrent[k];
+            k++;
+            found = CBFCircPlanMany(pose, closestNodeToPosition->position, querier, param.maxTimeSampleExploration,
+                                    param.plannerReachError, param)
+                        .atLeastOnePathReached;
+
+            triedAll = k >= closestNodesToCurrent.size();
+        } while (!found && !triedAll);
+
+        if (!found)
+        {
+            ROS_INFO_STREAM("Failed to go to ANY point in the graph!");
+            sntr.success = false;
+        }
+        else
+            sntr.success = true;
+
+        ROS_INFO_STREAM("Starting frontier exploration (Type A)..." << frontier.size() << " clusters found");
+
+        if (sntr.success)
+        {
+            for (int i = 0; i < frontier.size(); i++)
+            {
+                double bestDist = -VERYBIGNUMBER;
+                double tempDist;
+                VectorXd bestPoint = VectorXd::Zero(3);
+                for (int j = 0; j < frontier[i].size(); j++)
+                {
+                    tempDist = computeDistRadial(querier(frontier[i][j], param.sensingRadius), frontier[i][j], param.smoothingParam).halfSqDistance;
+                    if ((tempDist > 0.5 * pow(param.distanceMinBeta, 2)) && (tempDist > bestDist))
+                    {
+                        bestDist = tempDist;
+                        bestPoint = frontier[i][j];
+                    }
+                }
+
+                if (bestDist > -VERYBIGNUMBER / 2)
+                {
+                    vector<Node *> closestNodesToBestPoint = getNearestNodeList(bestPoint);
+
+                    Node *bestNode;
+                    double bestValue = VERYBIGNUMBER;
+                    Matrix3d bestOmega;
+                    int jmax = (closestNodesToBestPoint.size() < param.noTriesClosestPoint) ? closestNodesToBestPoint.size() : param.noTriesClosestPoint;
+
+                    for (int j = 0; j < jmax; j++)
+                    {
+                        Node *nodeTry = closestNodesToBestPoint[j];
+                        RobotPose poseTry;
+                        poseTry.position = nodeTry->position;
+                        poseTry.orientation = 0;
+
+                        GenerateManyPathsResult gmpr1 = CBFCircPlanMany(poseTry, bestPoint, querier, param.maxTimeSampleExploration, param.plannerReachError,
+                                                                        param);
+                        if (gmpr1.bestPathSize <= bestValue)
+                        {
+                            bestValue = gmpr1.bestPathSize;
+                            bestOmega = gmpr1.bestOmega;
+                            bestNode = nodeTry;
+                        }
+                    }
+
+                    if (bestValue < VERYBIGNUMBER / 2)
+                    {
+                        RobotPose poseBestPoint;
+                        poseBestPoint.position = bestPoint;
+                        poseBestPoint.orientation = 0;
+                        GenerateManyPathsResult gmpr2 = CBFCircPlanMany(poseBestPoint, param.globalTargetPosition, querier,
+                                                                        param.maxTimeSampleExploration, param.plannerReachError, param);
+
+                        double dist1 = (closestNodeToPosition->position - pose.position).norm();
+                        double dist2 = computeDistPath(getPath(closestNodeToPosition, bestNode));
+                        double dist3 = bestValue;
+                        double dist4 = gmpr2.bestPathSize;
+
+                        pointUnsorted.push_back(bestPoint);
+                        valueUnsorted.push_back(dist1 + dist2 + dist3 + dist4);
+                        indexGraphUnsorted.push_back(bestNode->id);
+                        omegaUnsorted.push_back(bestOmega);
+                    }
+                }
+            }
+
+            sntr.value = {};
+            sntr.points = {};
+            sntr.index = {};
+
+            if (valueUnsorted.size() > 0)
+            {
+                vector<int> ind = sortGiveIndex(valueUnsorted);
+                for (int i = 0; i < ind.size(); i++)
+                {
+                    sntr.value.push_back(valueUnsorted[ind[i]]);
+                    sntr.points.push_back(pointUnsorted[ind[i]]);
+                    sntr.index.push_back(indexGraphUnsorted[ind[i]]);
+                }
+
+                sntr.omega = omegaUnsorted[ind[0]];
+                sntr.indNode = sntr.index[0];
+                sntr.bestq = sntr.points[0];
+                sntr.success = true;
+                sntr.bestValue = sntr.value[0];
+
+                ROS_INFO_STREAM("SUCCESS: Point found, best value: " << sntr.bestValue);
+            }
+            else
+            {
+                ROS_INFO_STREAM("ERROR: No point found using Type A algorithm...");
+                sntr.success = false;
+            }
+        }
+
+        return sntr;
+    }
 
     vector<Edge *> Graph::getPath(Node *origin, Node *target)
     {

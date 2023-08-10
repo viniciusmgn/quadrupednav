@@ -70,9 +70,7 @@ public:
     inline static Graph graph;
     inline static Kdtree::KdTree *kdTree;
     inline static vector<VectorXd> pointsKDTree = {};
-
     inline static mutex mutexUpdateKDTree;
-
     inline static vector<DataForDebug> dataForDebug = {};
     inline static Parameters param;
 };
