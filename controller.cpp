@@ -98,6 +98,8 @@ void poseCallback(const nav_msgs::Odometry::ConstPtr &msg)
     if ((*msg).pose.pose.orientation.z < 0)
         sinhalfv = -sinhalfv;
 
+    //double newOrientation = 2 * atan2(sinhalfv, coshalfv);
+    //Global::orientation = 0.9*Global::orientation +  0.1*newOrientation;
     Global::orientation = 2 * atan2(sinhalfv, coshalfv);
 
     Global::measured = true;
@@ -148,14 +150,32 @@ vector<VectorXd> getLidarPoints(VectorXd position, double radius)
     //         obstacle.push_back(p);
     //     }
     // }
-    vector<VectorXd> obs1 = createRectangle(4, 1.5 + 0.7 + 4, 1, 8, 0);
-    vector<VectorXd> obs2 = createRectangle(4, 1.5 + -0.7 - 4, 1, 8, 0);
+    vector<VectorXd> obs1 = createRectangle(4, 1.5 + 0.8 + 4, 1, 8, 0);
+    vector<VectorXd> obs2 = createRectangle(4, 1.5 - 0.8 - 4, 1, 8, 0);
+
+    vector<VectorXd> obs3 = createRectangle(6.5, -1.5 + 0.8 + 7, 1, 14, 0);
+    vector<VectorXd> obs4 = createRectangle(6.5, -1.5  -0.8 - 3, 1, 6, 0);
+
+    vector<VectorXd> obs5 = createRectangle(1, -6.8, 10, 1, 0);
+    vector<VectorXd> obs6 = createRectangle(1,  10, 10, 1, 0);
 
     for (int i = 0; i < obs1.size(); i++)
         obstacle.push_back(obs1[i]);
 
     for (int i = 0; i < obs2.size(); i++)
         obstacle.push_back(obs2[i]);
+
+    for (int i = 0; i < obs3.size(); i++)
+        obstacle.push_back(obs3[i]);
+
+    for (int i = 0; i < obs4.size(); i++)
+        obstacle.push_back(obs4[i]);
+
+    for (int i = 0; i < obs5.size(); i++)
+        obstacle.push_back(obs5[i]);
+
+    for (int i = 0; i < obs6.size(); i++)
+        obstacle.push_back(obs6[i]);
 
     return obstacle;
 }
@@ -253,7 +273,7 @@ int main(int argc, char **argv)
     // Initialize some global variables
     Global::pubBodyTwist = &aux_pubBodyTwist;
     Global::startTime = ros::Time::now().toSec();
-    Global::currentGoalPosition << 9, 0, 0.8;
+    Global::currentGoalPosition << 9, 1, 0.8;
     Global::currentOmega = Matrix3d::Zero();
     VectorXd startingPosition = VectorXd::Zero(3);
     startingPosition << 0, 0, Global::param.constantHeight;

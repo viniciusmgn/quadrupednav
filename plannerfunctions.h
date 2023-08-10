@@ -19,22 +19,23 @@ namespace CBFCirc
     {
         double boundingRadius = 0.3;
         double boundingHeight = 1.4;
-        double smoothingParam = 0.1;
+        double smoothingParam = 0.5; //0.1 0.3
 
         double constantHeight = 0.8;
         double marginSafety = 0.4; // 0.8
         double sensingRadius = 3.0;
 
-        double gainRobotYaw = 2.0;
+        double gainRobotYaw = 4.0; //2.0
         double gainTargetController = 0.2;
-        double alphaCBFPositive = 0.5;
-        double alphaCBFNegative = 0.5;
-        double safetyMinBeta = 0.3;   // 0.5
-        double maxVelCircBeta = 0.25; // 0.5
+        double alphaCBFPositive = 1.0;
+        double alphaCBFNegative = 7.5;
+        double distanceMinBeta = 0.4;   // 0.5 0.3
+        double maxVelCircBeta = 1.25; // 0.5 0.5
         double maxTotalVel = 0.3;
+        double distanceMargin = 0.15;
 
-        double deltaTimePlanner = 0.1;
-        double maxTimePlanner = 50;
+        double deltaTimePlanner = 0.2; //0.1
+        double maxTimePlanner = 100; //50
         double plannerReachError = 0.2;
         double acceptableRationPlanning = 2.0;
 
@@ -46,6 +47,8 @@ namespace CBFCirc
         double stepCorrectPoint = 0.1;
         double radiusCreateNode = 1.5; //0.8
         double maxTimePlanConnectNode = 50;
+
+        int sampleStorePath = 15;
     };
 
     struct DistanceResult
@@ -94,6 +97,9 @@ namespace CBFCirc
     struct GeneratePathResult
     {
         vector<RobotPose> path;
+        vector<VectorXd> pathGradSafetyPosition;
+        vector<double> pathGradSafetyOrientation;
+        vector<double> pathDistance;
         GeneratePathState pathState;
         double finalError;
     };

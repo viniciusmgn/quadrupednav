@@ -107,6 +107,9 @@ namespace CBFCirc
         {
             *f << "plannedPos" << names[k] << " = processCell(load([dirData '/plannedPos" << names[k] << ".csv']));" << std::endl;
             *f << "plannedOri" << names[k] << " = processCell(load([dirData '/plannedOri" << names[k] << ".csv']));" << std::endl;
+            *f << "plannedGradSafPos" << names[k] << " = processCell(load([dirData '/plannedGradSafPos" << names[k] << ".csv']));" << std::endl;
+            *f << "plannedGradSafOri" << names[k] << " = processCell(load([dirData '/plannedGradSafOri" << names[k] << ".csv']));" << std::endl;
+            *f << "plannedDistance" << names[k] << " = processCell(load([dirData '/plannedDistance" << names[k] << ".csv']));" << std::endl;
         }
 
         *f << "run " << fname << "/parameters.m;" << std::endl;
@@ -321,6 +324,7 @@ namespace CBFCirc
         f->close();
 
         // WRITE: planned paths
+        double fat = Global::param.sampleStorePath;
         for (int k = 0; k < names.size(); k++)
         {
             f->open("/home/vinicius/Desktop/matlab/unitree_planning/" + fname + "/plannedPos" + names[k] + ".csv", ofstream::trunc);
@@ -328,8 +332,8 @@ namespace CBFCirc
             for (int i = 0; i < Global::dataForDebug.size(); i++)
             {
                 tempVector = {};
-                for (int j = 0; j < Global::dataForDebug[i].generateManyPathResult.pathResults[k].path.size(); j++)
-                    tempVector.push_back(Global::dataForDebug[i].generateManyPathResult.pathResults[k].path[j].position);
+                for (int j = 0; j < Global::dataForDebug[i].generateManyPathResult.pathResults[k].path.size()/fat; j++)
+                    tempVector.push_back(Global::dataForDebug[i].generateManyPathResult.pathResults[k].path[fat*j].position);
 
                 tempVectorVector.push_back(tempVector);
             }
@@ -342,10 +346,10 @@ namespace CBFCirc
             for (int i = 0; i < Global::dataForDebug.size(); i++)
             {
                 tempVector = {};
-                for (int j = 0; j < Global::dataForDebug[i].generateManyPathResult.pathResults[k].path.size(); j++)
+                for (int j = 0; j < Global::dataForDebug[i].generateManyPathResult.pathResults[k].path.size()/fat; j++)
                 {
                     VectorXd data = VectorXd::Ones(1);
-                    data << Global::dataForDebug[i].generateManyPathResult.pathResults[k].path[j].orientation;
+                    data << Global::dataForDebug[i].generateManyPathResult.pathResults[k].path[fat*j].orientation;
                     tempVector.push_back(data);
                 }
                     
@@ -354,6 +358,57 @@ namespace CBFCirc
             printVectorVectorsToCSV(f, tempVectorVector, 1);
             f->flush();
             f->close();
+
+            f->open("/home/vinicius/Desktop/matlab/unitree_planning/" + fname + "/plannedGradSafPos" + names[k] + ".csv", ofstream::trunc);
+            tempVectorVector = {};
+            for (int i = 0; i < Global::dataForDebug.size(); i++)
+            {
+                tempVector = {};
+                for (int j = 0; j < Global::dataForDebug[i].generateManyPathResult.pathResults[k].path.size()/fat; j++)
+                    tempVector.push_back(Global::dataForDebug[i].generateManyPathResult.pathResults[k].pathGradSafetyPosition[fat*j]);
+
+                tempVectorVector.push_back(tempVector);
+            }
+            printVectorVectorsToCSV(f, tempVectorVector, 3);
+            f->flush();
+            f->close();
+
+            f->open("/home/vinicius/Desktop/matlab/unitree_planning/" + fname + "/plannedGradSafOri" + names[k] + ".csv", ofstream::trunc);
+            tempVectorVector = {};
+            for (int i = 0; i < Global::dataForDebug.size(); i++)
+            {
+                tempVector = {};
+                for (int j = 0; j < Global::dataForDebug[i].generateManyPathResult.pathResults[k].path.size()/fat; j++)
+                {
+                    VectorXd data = VectorXd::Ones(1);
+                    data << Global::dataForDebug[i].generateManyPathResult.pathResults[k].pathGradSafetyOrientation[fat*j];
+                    tempVector.push_back(data);
+                }
+                    
+                tempVectorVector.push_back(tempVector);
+            }
+            printVectorVectorsToCSV(f, tempVectorVector, 1);
+            f->flush();
+            f->close();
+
+            f->open("/home/vinicius/Desktop/matlab/unitree_planning/" + fname + "/plannedDistance" + names[k] + ".csv", ofstream::trunc);
+            tempVectorVector = {};
+            for (int i = 0; i < Global::dataForDebug.size(); i++)
+            {
+                tempVector = {};
+                for (int j = 0; j < Global::dataForDebug[i].generateManyPathResult.pathResults[k].path.size()/fat; j++)
+                {
+                    VectorXd data = VectorXd::Ones(1);
+                    data << Global::dataForDebug[i].generateManyPathResult.pathResults[k].pathDistance[fat*j];
+                    tempVector.push_back(data);
+                }
+                    
+                tempVectorVector.push_back(tempVector);
+            }
+            printVectorVectorsToCSV(f, tempVectorVector, 1);
+            f->flush();
+            f->close();
+
         }
     }
 

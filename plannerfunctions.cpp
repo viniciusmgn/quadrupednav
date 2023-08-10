@@ -171,10 +171,15 @@ namespace CBFCirc
         VectorXd b = VectorXd::Zero(1);
 
         double cbfConst;
-        if (dr.safety > 0)
-            cbfConst = -param.alphaCBFPositive * (dr.safety);
+        // if (dr.safety > 0)
+        //     cbfConst = -param.alphaCBFPositive * (dr.safety);
+        // else
+        //     cbfConst = -param.alphaCBFNegative * (dr.safety);
+
+        if (dr.distance - param.distanceMargin > 0)
+            cbfConst = -param.alphaCBFPositive * (dr.distance - param.distanceMargin);
         else
-            cbfConst = -param.alphaCBFNegative * (dr.safety);
+            cbfConst = -param.alphaCBFNegative * (dr.distance - param.distanceMargin);
 
         b << cbfConst;
 
@@ -182,7 +187,7 @@ namespace CBFCirc
         if (abs(omega(0, 1)) + abs(omega(1, 2)) + abs(omega(2, 0)) >= VERYSMALLNUMBER)
         {
             A = matrixVertStack(A, vectorVertStack(omega * dr.gradSafetyPosition, 0).transpose());
-            double circConst = param.maxVelCircBeta * (1 - dr.safety / param.safetyMinBeta);
+            double circConst = param.maxVelCircBeta * (1 - dr.distance / param.distanceMinBeta);
             b = vectorVertStack(b, circConst);
         }
 
@@ -213,23 +218,31 @@ namespace CBFCirc
     {
         GeneratePathResult gpr;
         RobotPose pose = startingPose;
-        vector<RobotPose> posePath = {pose};
         double time = 0;
         bool cont = true;
         double dt;
 
         gpr.pathState = GeneratePathState::sucess;
+        gpr.path = {};
+        gpr.pathGradSafetyPosition = {};
+        gpr.pathGradSafetyOrientation = {};
+        gpr.pathDistance = {};
 
         while (cont)
         {
             CBFCircControllerResult cccr = CBFCircController(pose, targetPosition, querier(pose.position, param.sensingRadius), omega, param);
             if (cccr.feasible)
             {
+                gpr.path.push_back(pose);
+                gpr.pathGradSafetyPosition.push_back(cccr.distanceResult.gradSafetyPosition);
+                gpr.pathGradSafetyOrientation.push_back(cccr.distanceResult.gradSafetyOrientation);
+                gpr.pathDistance.push_back(cccr.distanceResult.distance);
+
                 pose.position += cccr.linearVelocity * param.deltaTimePlanner;
                 pose.orientation += cccr.angularVelocity * param.deltaTimePlanner;
                 time += param.deltaTimePlanner;
-                posePath.push_back(pose);
-                cont = (posePath[posePath.size() - 1].position - targetPosition).norm() > reachpointError;
+
+                cont = (gpr.path[gpr.path.size() - 1].position - targetPosition).norm() > reachpointError;
             }
             else
             {
@@ -244,8 +257,7 @@ namespace CBFCirc
         if (time >= maxTime)
             gpr.pathState = GeneratePathState::timeout;
 
-        gpr.path = posePath;
-        gpr.finalError = (posePath[posePath.size() - 1].position - targetPosition).norm();
+        gpr.finalError = (gpr.path[gpr.path.size() - 1].position - targetPosition).norm();
 
         return gpr;
     }
@@ -270,12 +282,13 @@ namespace CBFCirc
         for (int i = 0; i < gmpr.pathOmega.size(); i++)
         {
             GeneratePathResult gpr = CBFCircPlanOne(startingPose, targetPosition, querier, gmpr.pathOmega[i], maxTimeTemp, reachpointError, param);
+            double distToGoal = (startingPose.position - targetPosition).norm();
             gmpr.pathResults.push_back(gpr);
-            gmpr.pathLenghts.push_back((gpr.pathState == GeneratePathState::sucess) ? curveLength(gpr.path) : VERYBIGNUMBER);
+            gmpr.pathLenghts.push_back((gpr.pathState == GeneratePathState::sucess) ? curveLength(gpr.path) : VERYBIGNUMBER + distToGoal);
             gmpr.atLeastOnePathReached = gmpr.atLeastOnePathReached || (gpr.pathState == GeneratePathState::sucess);
 
             if ((gpr.pathState == GeneratePathState::sucess) &&
-                (gmpr.pathLenghts[i] <= param.acceptableRationPlanning * (startingPose.position - targetPosition).norm()))
+                (gmpr.pathLenghts[i] <= param.acceptableRationPlanning * distToGoal))
             {
                 maxTimeTemp = 0.2;
             }
