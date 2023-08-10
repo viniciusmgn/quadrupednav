@@ -42,11 +42,14 @@ namespace CBFCirc
         int freqStoreDebug = 15;
         int freqReplanPath = 500;
         int freqUpdateGraph = 500;
+        int freqUpdateKDTree = 100;
 
         double noMaxIterationsCorrectPoint = 20;
         double stepCorrectPoint = 0.1;
         double radiusCreateNode = 1.5; //0.8
         double maxTimePlanConnectNode = 50;
+
+        double minDistFilterKDTree = 0.3;
 
         int sampleStorePath = 15;
     };

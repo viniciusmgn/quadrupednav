@@ -59,6 +59,7 @@ namespace CBFCirc
             dfd.currentOmega = Global::currentOmega;
             dfd.planningState = Global::planningState;
             dfd.graph = Global::graph;
+            dfd.pointsKDTree = Global::pointsKDTree;
             
 
             Global::dataForDebug.push_back(dfd);
@@ -95,7 +96,7 @@ namespace CBFCirc
         *f << "planningState = load([dirData '/planningState.csv']);" << std::endl;
         *f << "graphNodes = processCell(load([dirData '/graphNodes.csv']));" << std::endl;
         *f << "graphEdges = processCell(load([dirData '/graphEdges.csv']));" << std::endl;
-        
+        *f << "pointsKDTree = processCell(load([dirData '/pointsKDTree.csv']));" << std::endl;
 
         // Write planned paths
         vector<string> names = {};
@@ -320,6 +321,21 @@ namespace CBFCirc
             tempVectorVector.push_back(tempVector);
         }
         printVectorVectorsToCSV(f, tempVectorVector, 2);
+        f->flush();
+        f->close();
+
+        // WRITE: points Kd tree
+        f->open("/home/vinicius/Desktop/matlab/unitree_planning/" + fname + "/pointsKDTree.csv", ofstream::trunc);
+        tempVectorVector = {};
+        for (int i = 0; i < Global::dataForDebug.size(); i++)
+        {
+            tempVector = {};
+            for (int j = 0; j < Global::dataForDebug[i].pointsKDTree.size(); j++)
+                tempVector.push_back(Global::dataForDebug[i].pointsKDTree[j]);
+
+            tempVectorVector.push_back(tempVector);
+        }
+        printVectorVectorsToCSV(f, tempVectorVector, 3);
         f->flush();
         f->close();
 

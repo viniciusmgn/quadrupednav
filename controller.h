@@ -20,6 +20,10 @@
 #include <boost/filesystem.hpp>
 #include <mutex>
 #include "std_msgs/String.h"
+#include "./kdtree-cpp-master/kdtree.hpp"
+
+
+
 
 #include "utils.h"
 #include "utils.cpp"
@@ -64,6 +68,10 @@ public:
     inline static bool firstPlanCreated = false;
     inline static vector<string> messages = {};
     inline static Graph graph;
+    inline static Kdtree::KdTree *kdTree;
+    inline static vector<VectorXd> pointsKDTree = {};
+
+    inline static mutex mutexUpdateKDTree;
 
     inline static vector<DataForDebug> dataForDebug = {};
     inline static Parameters param;

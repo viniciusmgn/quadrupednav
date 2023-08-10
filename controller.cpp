@@ -98,8 +98,6 @@ void poseCallback(const nav_msgs::Odometry::ConstPtr &msg)
     if ((*msg).pose.pose.orientation.z < 0)
         sinhalfv = -sinhalfv;
 
-    //double newOrientation = 2 * atan2(sinhalfv, coshalfv);
-    //Global::orientation = 0.9*Global::orientation +  0.1*newOrientation;
     Global::orientation = 2 * atan2(sinhalfv, coshalfv);
 
     Global::measured = true;
@@ -129,55 +127,45 @@ vector<VectorXd> createRectangle(double xcenter, double ycenter, double xlength,
     return points;
 }
 
+vector<VectorXd> allThePoints = {};
+vector<VectorXd> lidarPointSource(VectorXd position, double radius)
+{
+    vector<VectorXd> points = {};
+    for (int i = 0; i < allThePoints.size(); i++)
+        if ((allThePoints[i] - position).norm() <= radius)
+            points.push_back(allThePoints[i]);
+
+    return points;
+}
+
 vector<VectorXd> getLidarPoints(VectorXd position, double radius)
 {
-    vector<VectorXd> obstacle = {};
 
-    // double R = 1;
-    // double xc = 4;
-    // double yc = 0.5;
-    // double H = 2;
+    vector<VectorXd> points = {};
 
-    // for (int i = 0; i <= 6; i++)
-    // {
-    //     double r = R * ((double)i) / 6;
-    //     int jmax = (i + 1) * 7;
-    //     for (int j = 0; j < jmax; j++)
-    //     {
-    //         double theta = (2 * 3.14) * j / ((double)jmax);
-    //         VectorXd p = VectorXd::Zero(3);
-    //         p << xc + r * cos(theta), yc + r * sin(theta), Global::param.constantHeight;
-    //         obstacle.push_back(p);
-    //     }
-    // }
-    vector<VectorXd> obs1 = createRectangle(4, 1.5 + 0.8 + 4, 1, 8, 0);
-    vector<VectorXd> obs2 = createRectangle(4, 1.5 - 0.8 - 4, 1, 8, 0);
+    if (Global::pointsKDTree.size() > 0)
+    {
+        Global::mutexUpdateKDTree.lock();
 
-    vector<VectorXd> obs3 = createRectangle(6.5, -1.5 + 0.8 + 7, 1, 14, 0);
-    vector<VectorXd> obs4 = createRectangle(6.5, -1.5  -0.8 - 3, 1, 6, 0);
+        vector<double> positionV(3);
+        positionV[0] = position[0];
+        positionV[1] = position[1];
+        positionV[2] = position[2];
 
-    vector<VectorXd> obs5 = createRectangle(1, -6.8, 10, 1, 0);
-    vector<VectorXd> obs6 = createRectangle(1,  10, 10, 1, 0);
+        Kdtree::KdNodeVector result;
+        Global::kdTree->range_nearest_neighbors(positionV, radius, &result);
 
-    for (int i = 0; i < obs1.size(); i++)
-        obstacle.push_back(obs1[i]);
+        for (int i = 0; i < result.size(); ++i)
+        {
+            VectorXd ptemp = VectorXd::Zero(3);
+            ptemp << result[i].point[0], result[i].point[1], result[i].point[2];
+            points.push_back(ptemp);
+        }
 
-    for (int i = 0; i < obs2.size(); i++)
-        obstacle.push_back(obs2[i]);
+        Global::mutexUpdateKDTree.unlock();
+    }
 
-    for (int i = 0; i < obs3.size(); i++)
-        obstacle.push_back(obs3[i]);
-
-    for (int i = 0; i < obs4.size(); i++)
-        obstacle.push_back(obs4[i]);
-
-    for (int i = 0; i < obs5.size(); i++)
-        obstacle.push_back(obs5[i]);
-
-    for (int i = 0; i < obs6.size(); i++)
-        obstacle.push_back(obs6[i]);
-
-    return obstacle;
+    return points;
 }
 
 // MAIN FUNCTIONS
@@ -224,8 +212,7 @@ void updateGraph()
         if (Global::measured && (Global::generalCounter % Global::param.freqUpdateGraph == 0))
         {
             VectorXd currentPoint = getRobotPose().position;
-            VectorXd correctedPoint = correctPoint(currentPoint, getLidarPoints(getRobotPose().position,
-                                                   Global::param.sensingRadius), Global::param);
+            VectorXd correctedPoint = correctPoint(currentPoint, getLidarPoints(getRobotPose().position, Global::param.sensingRadius), Global::param);
 
             if (Global::graph.getNeighborNodes(correctedPoint, Global::param.radiusCreateNode).size() == 0)
             {
@@ -260,6 +247,52 @@ void updateGraph()
     }
 }
 
+void updateKDTree()
+{
+    while (ros::ok() && Global::continueAlgorithm)
+    {
+        if (Global::measured && (Global::generalCounter % Global::param.freqUpdateKDTree == 0))
+        {
+
+            Global::mutexUpdateKDTree.lock();
+
+            vector<VectorXd> pointsFromLidar = lidarPointSource(getRobotPose().position, Global::param.sensingRadius);
+
+            for (int i = 0; i < pointsFromLidar.size(); i++)
+            {
+                double minDist = VERYBIGNUMBER;
+                for (int j = 0; j < Global::pointsKDTree.size(); j++)
+                    minDist = min(minDist, (Global::pointsKDTree[j] - pointsFromLidar[i]).squaredNorm());
+
+                if (minDist > pow(Global::param.minDistFilterKDTree, 2))
+                    Global::pointsKDTree.push_back(pointsFromLidar[i]);
+            }
+
+            Kdtree::KdNodeVector nodes;
+
+            // Guarantee that it has at least one node
+            vector<double> point(3);
+            point[0] = VERYBIGNUMBER;
+            point[1] = VERYBIGNUMBER;
+            point[2] = VERYBIGNUMBER;
+            nodes.push_back(Kdtree::KdNode(point));
+
+            for (int i = 0; i < Global::pointsKDTree.size(); i++)
+            {
+                vector<double> point(3);
+                point[0] = Global::pointsKDTree[i][0];
+                point[1] = Global::pointsKDTree[i][1];
+                point[2] = Global::pointsKDTree[i][2];
+                nodes.push_back(Kdtree::KdNode(point));
+            }
+
+            Global::kdTree = new Kdtree::KdTree(&nodes, 2);
+
+            Global::mutexUpdateKDTree.unlock();
+        }
+    }
+}
+
 int main(int argc, char **argv)
 {
 
@@ -279,10 +312,40 @@ int main(int argc, char **argv)
     startingPosition << 0, 0, Global::param.constantHeight;
     Global::graph.addNode(startingPosition);
 
+    //
+
+    vector<VectorXd> obs1 = createRectangle(4, 1.5 + 0.8 + 4, 1, 8, 0);
+    vector<VectorXd> obs2 = createRectangle(4, 1.5 - 0.8 - 4, 1, 8, 0);
+
+    vector<VectorXd> obs3 = createRectangle(6.5, -1.5 + 0.8 + 7, 1, 14, 0);
+    vector<VectorXd> obs4 = createRectangle(6.5, -1.5 - 0.8 - 3, 1, 6, 0);
+
+    vector<VectorXd> obs5 = createRectangle(1, -6.8, 10, 1, 0);
+    vector<VectorXd> obs6 = createRectangle(1, 10, 10, 1, 0);
+
+    for (int i = 0; i < obs1.size(); i++)
+        allThePoints.push_back(obs1[i]);
+
+    for (int i = 0; i < obs2.size(); i++)
+        allThePoints.push_back(obs2[i]);
+
+    for (int i = 0; i < obs3.size(); i++)
+        allThePoints.push_back(obs3[i]);
+
+    for (int i = 0; i < obs4.size(); i++)
+        allThePoints.push_back(obs4[i]);
+
+    for (int i = 0; i < obs5.size(); i++)
+        allThePoints.push_back(obs5[i]);
+
+    for (int i = 0; i < obs6.size(); i++)
+        allThePoints.push_back(obs6[i]);
+
     // Initialize some threads
     std::thread lowLevelMovementThread = thread(lowLevelMovement);
     std::thread replanOmegaThread = thread(replanOmega);
     std::thread updateGraphThread = thread(updateGraph);
+    std::thread updateKDTreeThread = thread(updateKDTree);
 
     while (ros::ok() && Global::continueAlgorithm)
     {
@@ -330,6 +393,7 @@ int main(int argc, char **argv)
     lowLevelMovementThread.join();
     replanOmegaThread.join();
     updateGraphThread.join();
+    updateKDTreeThread.join();
 
     ofstream file;
     debug_printAlgStateToMatlab(&file);

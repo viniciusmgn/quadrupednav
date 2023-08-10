@@ -40,6 +40,7 @@ namespace CBFCirc
         Matrix3d currentOmega;
         MotionPlanningState planningState;
         Graph graph;
+        vector<VectorXd> pointsKDTree;
     };
 
     string getFolderName();
