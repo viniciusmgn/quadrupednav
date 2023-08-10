@@ -19,6 +19,7 @@ using namespace Eigen;
 #include "controller.h"
 #include "controller.cpp"
 #include "debugfunctions.h"
+#include "graph.h"
 
 namespace CBFCirc
 {
@@ -57,6 +58,8 @@ namespace CBFCirc
             dfd.generateManyPathResult = Global::generateManyPathResult;
             dfd.currentOmega = Global::currentOmega;
             dfd.planningState = Global::planningState;
+            dfd.graph = Global::graph;
+            
 
             Global::dataForDebug.push_back(dfd);
         }
@@ -90,7 +93,8 @@ namespace CBFCirc
         *f << "currentLidarPoints = processCell(load([dirData '/currentLidarPoints.csv']));" << std::endl;
         *f << "currentOmega = load([dirData '/currentOmega.csv']);" << std::endl;
         *f << "planningState = load([dirData '/planningState.csv']);" << std::endl;
-
+        *f << "graphNodes = processCell(load([dirData '/graphNodes.csv']));" << std::endl;
+        *f << "graphEdges = processCell(load([dirData '/graphEdges.csv']));" << std::endl;
         
 
         // Write planned paths
@@ -278,6 +282,43 @@ namespace CBFCirc
         printVectorsToCSV(f, tempDouble);
         f->flush();
         f->close();  
+
+        // WRITE: graph nodes
+        f->open("/home/vinicius/Desktop/matlab/unitree_planning/" + fname + "/graphNodes.csv", ofstream::trunc);
+        tempVectorVector = {};
+        for (int i = 0; i < Global::dataForDebug.size(); i++)
+        {
+            tempVector = {};
+            for (int j = 0; j < Global::dataForDebug[i].graph.nodes.size(); j++)
+                tempVector.push_back(Global::dataForDebug[i].graph.nodes[j]->position);
+
+            tempVectorVector.push_back(tempVector);
+        }
+        printVectorVectorsToCSV(f, tempVectorVector, 3);
+        f->flush();
+        f->close();
+
+        // WRITE: graph edges
+        f->open("/home/vinicius/Desktop/matlab/unitree_planning/" + fname + "/graphEdges.csv", ofstream::trunc);
+        tempVectorVector = {};
+        for (int i = 0; i < Global::dataForDebug.size(); i++)
+        {
+            tempVector = {};
+            for (int j = 0; j < Global::dataForDebug[i].graph.edges.size(); j++)
+            {
+                VectorXd edge = VectorXd::Zero(2);
+                int inNode = Global::dataForDebug[i].graph.edges[j]->nodeIn->id;
+                int outNode = Global::dataForDebug[i].graph.edges[j]->nodeOut->id;
+                edge << (double) inNode, (double) outNode;
+                tempVector.push_back(edge);
+
+            }
+                
+            tempVectorVector.push_back(tempVector);
+        }
+        printVectorVectorsToCSV(f, tempVectorVector, 2);
+        f->flush();
+        f->close();
 
         // WRITE: planned paths
         for (int k = 0; k < names.size(); k++)

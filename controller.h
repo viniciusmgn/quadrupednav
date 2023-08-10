@@ -37,14 +37,8 @@ using namespace CBFCirc;
 
 // STRUCT AND CLASSES
 
-enum MotionPlanningState
-{
-    pathToExploration,
-    goingToExplore,
-    goingToGlobalGoal,
-    sucess,
-    failure
-};
+
+
 
 class Global
 {
@@ -57,7 +51,6 @@ public:
     inline static ros::Publisher *pubBodyTwist = NULL;
     inline static int generalCounter = 0;
     inline static bool measured = false;
-    inline static vector<DataForDebug> dataForDebug = {};
     inline static double distance = 0;
     inline static double safety = 0;
     inline static VectorXd gradSafetyPosition = VectorXd::Zero(3);
@@ -72,8 +65,11 @@ public:
     inline static vector<string> messages = {};
     inline static Graph graph;
 
+    inline static vector<DataForDebug> dataForDebug = {};
     inline static Parameters param;
 };
+
+
 
 double getTime();
 RobotPose getRobotPose();

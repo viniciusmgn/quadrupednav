@@ -203,9 +203,9 @@ void updateGraph()
     {
         if (Global::measured && (Global::generalCounter % Global::param.freqUpdateGraph == 0))
         {
-
-            VectorXd correctedPoint = correctPoint(getRobotPose().position,
-                                                   getLidarPoints(getRobotPose().position, Global::param.sensingRadius), Global::param);
+            VectorXd currentPoint = getRobotPose().position;
+            VectorXd correctedPoint = correctPoint(currentPoint, getLidarPoints(getRobotPose().position,
+                                                   Global::param.sensingRadius), Global::param);
 
             if (Global::graph.getNeighborNodes(correctedPoint, Global::param.radiusCreateNode).size() == 0)
             {
@@ -220,20 +220,20 @@ void updateGraph()
                     pose.orientation = 0;
 
                     GenerateManyPathsResult gmpr = CBFCircPlanMany(pose, correctedPoint, getLidarPoints,
-                                                                   Global::param.maxTimePlanConnectNode, Global::param);
+                                                                   Global::param.maxTimePlanConnectNode, Global::param.plannerReachError, Global::param);
                     if (gmpr.atLeastOnePathReached)
                     {
                         indexes.push_back(i);
                         omegas.push_back(gmpr.bestOmega);
                         distances.push_back(gmpr.bestPathSize);
                     }
+                }
 
-                    if (distances.size() > 0)
-                    {
-                        vector<int> ind = sortGiveIndex(distances);
-                        Node *newNode = Global::graph.addNode(correctedPoint);
-                        Global::graph.connect(Global::graph.nodes[indexes[ind[0]]], newNode, distances[ind[0]], omegas[ind[0]]);
-                    }
+                if (distances.size() > 0)
+                {
+                    vector<int> ind = sortGiveIndex(distances);
+                    Node *newNode = Global::graph.addNode(correctedPoint);
+                    Global::graph.connect(Global::graph.nodes[indexes[ind[0]]], newNode, distances[ind[0]], omegas[ind[0]]);
                 }
             }
         }
@@ -255,7 +255,9 @@ int main(int argc, char **argv)
     Global::startTime = ros::Time::now().toSec();
     Global::currentGoalPosition << 9, 0, 0.8;
     Global::currentOmega = Matrix3d::Zero();
-    Global::graph.addNode(VectorXd::Zero(3));
+    VectorXd startingPosition = VectorXd::Zero(3);
+    startingPosition << 0, 0, Global::param.constantHeight;
+    Global::graph.addNode(startingPosition);
 
     // Initialize some threads
     std::thread lowLevelMovementThread = thread(lowLevelMovement);
@@ -273,19 +275,17 @@ int main(int argc, char **argv)
 
             if (Global::generalCounter % 50 == 0)
             {
-                ROS_INFO_STREAM("---------------------");
-
                 if (Global::planningState == MotionPlanningState::goingToGlobalGoal)
                 {
-                    ROS_INFO_STREAM("GOING TO GLOBAL TARGET");
+                    ROS_INFO_STREAM("-----GOING TO GLOBAL TARGET------");
                 }
                 if (Global::planningState == MotionPlanningState::pathToExploration)
                 {
-                    ROS_INFO_STREAM("PATH TO EXPLORATION");
+                    ROS_INFO_STREAM("-------PATH TO EXPLORATION-------");
                 }
                 if (Global::planningState == MotionPlanningState::goingToExplore)
                 {
-                    ROS_INFO_STREAM("GOING TO EXPLORE");
+                    ROS_INFO_STREAM("---------GOING TO EXPLORE--------");
                 }
                 // ROS_INFO_STREAM("counter = " << Global::generalCounter);
                 // ROS_INFO_STREAM("linvelocity = " << printVector(Global::desLinVelocity));
@@ -309,6 +309,7 @@ int main(int argc, char **argv)
 
     lowLevelMovementThread.join();
     replanOmegaThread.join();
+    updateGraphThread.join();
 
     ofstream file;
     debug_printAlgStateToMatlab(&file);

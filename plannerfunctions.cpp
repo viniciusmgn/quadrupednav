@@ -149,22 +149,22 @@ namespace CBFCirc
         VectorXd vd = VectorXd::Zero(2);
         vd << vd3d[0], vd3d[1];
 
-        //Vector2d dir;
-        //dir << cos(pose.orientation), sin(pose.orientation);
-        //VectorXd normVelocity = vd.normalized();
-        //double wd = param.gainRobotYaw * (dir[0] * normVelocity[1] - dir[1] * normVelocity[0]);
-        MatrixXd restvw = MatrixXd::Zero(1,3);
-        restvw(0,0) = -param.gainRobotYaw*sin(pose.orientation);
-        restvw(0,1) =  param.gainRobotYaw*cos(pose.orientation);
-        restvw(0,2) =  -1;
-        MatrixXd H1 = MatrixXd::Zero(3,3);
-        H1(0,0)=1;
-        H1(1,1)=1;
-        MatrixXd H2 = restvw.transpose()*restvw;
+        // Vector2d dir;
+        // dir << cos(pose.orientation), sin(pose.orientation);
+        // VectorXd normVelocity = vd.normalized();
+        // double wd = param.gainRobotYaw * (dir[0] * normVelocity[1] - dir[1] * normVelocity[0]);
+        MatrixXd restvw = MatrixXd::Zero(1, 3);
+        restvw(0, 0) = -param.gainRobotYaw * sin(pose.orientation);
+        restvw(0, 1) = param.gainRobotYaw * cos(pose.orientation);
+        restvw(0, 2) = -1;
+        MatrixXd H1 = MatrixXd::Zero(3, 3);
+        H1(0, 0) = 1;
+        H1(1, 1) = 1;
+        MatrixXd H2 = restvw.transpose() * restvw;
 
         VectorXd ud = vectorVertStack(vd, 0);
 
-        MatrixXd H = 2 * (H1+H2);
+        MatrixXd H = 2 * (H1 + H2);
         VectorXd f = -2 * ud;
         MatrixXd A = vectorVertStack(dr.gradSafetyPosition, dr.gradSafetyOrientation).transpose();
 
@@ -265,12 +265,20 @@ namespace CBFCirc
         gmpr.pathResults = {};
         gmpr.atLeastOnePathReached = false;
 
+        double maxTimeTemp = maxTime;
+
         for (int i = 0; i < gmpr.pathOmega.size(); i++)
         {
-            GeneratePathResult gpr = CBFCircPlanOne(startingPose, targetPosition, querier, gmpr.pathOmega[i], maxTime, reachpointError, param);
+            GeneratePathResult gpr = CBFCircPlanOne(startingPose, targetPosition, querier, gmpr.pathOmega[i], maxTimeTemp, reachpointError, param);
             gmpr.pathResults.push_back(gpr);
             gmpr.pathLenghts.push_back((gpr.pathState == GeneratePathState::sucess) ? curveLength(gpr.path) : VERYBIGNUMBER);
             gmpr.atLeastOnePathReached = gmpr.atLeastOnePathReached || (gpr.pathState == GeneratePathState::sucess);
+
+            if ((gpr.pathState == GeneratePathState::sucess) &&
+                (gmpr.pathLenghts[i] <= param.acceptableRationPlanning * (startingPose.position - targetPosition).norm()))
+            {
+                maxTimeTemp = 0.2;
+            }
         }
 
         vector<int> ind = sortGiveIndex(gmpr.pathLenghts);
@@ -283,15 +291,14 @@ namespace CBFCirc
     RadialDistanceResult computeDistRadial(vector<VectorXd> points, VectorXd position, double smoothingParam)
     {
         RadialDistanceResult rdr;
-        vector<double> halfSqDistance={};
-        vector<VectorXd> distanceVector={};
-  
+        vector<double> halfSqDistance = {};
+        vector<VectorXd> distanceVector = {};
 
         for (int i = 0; i < points.size(); i++)
         {
             // Transform point
-            halfSqDistance.push_back(0.5*(points[i]-position).squaredNorm());
-            distanceVector.push_back(points[i]-position);
+            halfSqDistance.push_back(0.5 * (points[i] - position).squaredNorm());
+            distanceVector.push_back(points[i] - position);
         }
 
         SoftSelectMinResult ssmrHalfSqDistance = softSelectMin(3, halfSqDistance, distanceVector, smoothingParam);
@@ -305,7 +312,7 @@ namespace CBFCirc
 
         int k = 0;
         VectorXd pointCorrected = point;
-        RadialDistanceResult rdr = computeDistRadial(neighborPoints, pointCorrected, param.smoothingParam);   
+        RadialDistanceResult rdr = computeDistRadial(neighborPoints, pointCorrected, param.smoothingParam);
         double currentDist, newDist;
 
         do

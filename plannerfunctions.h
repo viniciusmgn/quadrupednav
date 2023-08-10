@@ -20,22 +20,23 @@ namespace CBFCirc
         double boundingRadius = 0.3;
         double boundingHeight = 1.4;
         double smoothingParam = 0.1;
-        
+
         double constantHeight = 0.8;
-        double marginSafety = 0.4; //0.8
+        double marginSafety = 0.4; // 0.8
         double sensingRadius = 3.0;
 
         double gainRobotYaw = 2.0;
         double gainTargetController = 0.2;
         double alphaCBFPositive = 0.5;
         double alphaCBFNegative = 0.5;
-        double safetyMinBeta = 0.3; //0.5
-        double maxVelCircBeta = 0.25; //0.5
+        double safetyMinBeta = 0.3;   // 0.5
+        double maxVelCircBeta = 0.25; // 0.5
         double maxTotalVel = 0.3;
-        
-        double deltaTimePlanner=0.1;
-        double maxTimePlanner=50;
+
+        double deltaTimePlanner = 0.1;
+        double maxTimePlanner = 50;
         double plannerReachError = 0.2;
+        double acceptableRationPlanning = 2.0;
 
         int freqStoreDebug = 15;
         int freqReplanPath = 500;
@@ -43,7 +44,7 @@ namespace CBFCirc
 
         double noMaxIterationsCorrectPoint = 20;
         double stepCorrectPoint = 0.1;
-        double radiusCreateNode = 0.8;
+        double radiusCreateNode = 1.5; //0.8
         double maxTimePlanConnectNode = 50;
     };
 
@@ -82,7 +83,7 @@ namespace CBFCirc
         bool feasible;
     };
 
-    enum GeneratePathState
+    enum class GeneratePathState
     {
         sucess,
         unfeasible,
@@ -107,17 +108,24 @@ namespace CBFCirc
         Matrix3d bestOmega;
     };
 
-    typedef function<vector<VectorXd>(VectorXd, double)> MapQuerier;
+    enum class MotionPlanningState
+    {
+        pathToExploration,
+        goingToExplore,
+        goingToGlobalGoal,
+        sucess,
+        failure
+    };
 
+    typedef function<vector<VectorXd>(VectorXd, double)> MapQuerier;
 
     DistanceResult computeDist(vector<VectorXd> points, RobotPose pose, Parameters param);
     VectorFieldResult vectorField(VectorXd point, vector<VectorXd> path, double alpha, double percentLengthStop);
     CBFCircControllerResult CBFCircController(RobotPose pose, VectorXd targetPosition, vector<VectorXd> neighborPoints, Matrix3d omega, Parameters param);
-    GeneratePathResult CBFCircPlanOne(RobotPose startingPose, VectorXd targetPosition,  MapQuerier querier, Matrix3d omega, double maxTime, double reachpointError, Parameters param); 
+    GeneratePathResult CBFCircPlanOne(RobotPose startingPose, VectorXd targetPosition, MapQuerier querier, Matrix3d omega, double maxTime, double reachpointError, Parameters param);
     double curveLength(vector<RobotPose> posePath);
-    GenerateManyPathsResult CBFCircPlanMany(RobotPose startingPose, VectorXd targetPosition,  MapQuerier querier, double maxTime, double reachpointError, Parameters param);
+    GenerateManyPathsResult CBFCircPlanMany(RobotPose startingPose, VectorXd targetPosition, MapQuerier querier, double maxTime, double reachpointError, Parameters param);
     RadialDistanceResult computeDistRadial(vector<VectorXd> points, VectorXd position, double smoothingParam);
     VectorXd correctPoint(VectorXd point, vector<VectorXd> neighborPoints, Parameters param);
-
 
 }

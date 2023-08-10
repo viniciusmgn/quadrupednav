@@ -14,6 +14,10 @@
 using namespace std;
 using namespace Eigen;
 
+#include "graph.h"
+
+
+
 namespace CBFCirc
 {
     class DataForDebug
@@ -35,6 +39,7 @@ namespace CBFCirc
         GenerateManyPathsResult generateManyPathResult;
         Matrix3d currentOmega;
         MotionPlanningState planningState;
+        Graph graph;
     };
 
     string getFolderName();
