@@ -73,6 +73,15 @@ public:
     inline static mutex mutexUpdateKDTree;
     inline static vector<DataForDebug> dataForDebug = {};
     inline static Parameters param;
+    inline static vector<Edge *> currentPath = {};
+    inline static int currentIndexPath = {};  
+    //inline static VectorXd bconstraint = VectorXd::Zero(3);
+
+
+    inline static bool replanOmegaWorking = false;
+    inline static bool updateGraphWorking = false;
+    inline static bool updateKDTreeWorking = false;
+    inline static bool transitionAlgWorking = false;
 };
 
 

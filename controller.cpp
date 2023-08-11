@@ -185,6 +185,7 @@ void lowLevelMovement()
             Global::gradSafetyPosition = cccr.distanceResult.gradSafetyPosition;
             Global::gradSafetyOrientation = cccr.distanceResult.gradSafetyOrientation;
             Global::witnessDistance = cccr.distanceResult.witnessDistance;
+            //Global::bconstraint = cccr.bconstraint;
 
             // Send the twist
             setTwist(cccr.linearVelocity, cccr.angularVelocity);
@@ -196,20 +197,22 @@ void replanOmega()
 {
     while (ros::ok() && Global::continueAlgorithm)
     {
-        if (Global::measured && (Global::generalCounter % Global::param.freqReplanPath == 0))
+
+        if (Global::measured && (Global::generalCounter % Global::param.freqReplanPath == 0) && !Global::replanOmegaWorking)
         {
+            Global::replanOmegaWorking = true;
+
             Global::generateManyPathResult = CBFCircPlanMany(getRobotPose(), Global::currentGoalPosition, getLidarPoints,
                                                              Global::param.maxTimePlanner, Global::param.plannerReachError, Global::param);
 
-            //DEBUG
-            debug_addMessage("Omega replanned!");
-            if((Global::currentOmega-Global::generateManyPathResult.bestOmega).norm())
-                debug_addMessage("Changed sense of circulation");
-
-            //DEBUG
+            // DEBUG
+            debug_generateManyPathsReport();
+            // DEBUG
 
             Global::currentOmega = Global::generateManyPathResult.bestOmega;
             Global::firstPlanCreated = true;
+
+            Global::replanOmegaWorking = false;
         }
     }
 }
@@ -218,8 +221,10 @@ void updateGraph()
 {
     while (ros::ok() && Global::continueAlgorithm)
     {
-        if (Global::measured && (Global::generalCounter % Global::param.freqUpdateGraph == 0))
+        if (Global::measured && (Global::generalCounter % Global::param.freqUpdateGraph == 0) && !Global::updateGraphWorking)
         {
+            Global::updateGraphWorking = true;
+
             VectorXd currentPoint = getRobotPose().position;
             VectorXd correctedPoint = correctPoint(currentPoint, getLidarPoints(getRobotPose().position, Global::param.sensingRadius), Global::param);
 
@@ -252,6 +257,8 @@ void updateGraph()
                     Global::graph.connect(Global::graph.nodes[indexes[ind[0]]], newNode, distances[ind[0]], omegas[ind[0]]);
                 }
             }
+
+            Global::updateGraphWorking = false;
         }
     }
 }
@@ -260,10 +267,11 @@ void updateKDTree()
 {
     while (ros::ok() && Global::continueAlgorithm)
     {
-        if (Global::measured && (Global::generalCounter % Global::param.freqUpdateKDTree == 0))
+        if (Global::measured && (Global::generalCounter % Global::param.freqUpdateKDTree == 0) && !Global::updateKDTreeWorking)
         {
 
             Global::mutexUpdateKDTree.lock();
+            Global::updateKDTreeWorking = true;
 
             vector<VectorXd> pointsFromLidar = lidarPointSource(getRobotPose().position, Global::param.sensingRadius);
 
@@ -297,7 +305,77 @@ void updateKDTree()
 
             Global::kdTree = new Kdtree::KdTree(&nodes, 2);
 
+            Global::updateKDTreeWorking = false;
             Global::mutexUpdateKDTree.unlock();
+        }
+    }
+}
+
+void transitionAlg()
+{
+    while (ros::ok() && Global::continueAlgorithm)
+    {
+        if (Global::measured)
+        {
+            Global::transitionAlgWorking = true;
+            bool pointReached = (getRobotPose().position - Global::currentGoalPosition).norm() <= Global::param.plannerReachError;
+
+            if ((Global::planningState == MotionPlanningState::goingToGlobalGoal) && pointReached)
+            {
+                Global::planningState = MotionPlanningState::sucess;
+                Global::continueAlgorithm = false;
+
+                // DEBUG
+                debug_addMessage("Success!");
+                // DEBUG
+            }
+
+            if ((Global::planningState == MotionPlanningState::goingToExplore) && pointReached && (!Global::updateKDTreeWorking) && (!Global::replanOmegaWorking))
+            {
+                Global::planningState = MotionPlanningState::goingToGlobalGoal;
+                Global::currentGoalPosition = Global::param.globalTargetPosition;
+
+                Global::updateKDTreeWorking = true;
+                updateKDTree();
+                Global::updateKDTreeWorking = false;
+                Global::replanOmegaWorking = true;
+                replanOmega();
+                Global::replanOmegaWorking = false;
+
+            }
+
+            if ((Global::planningState == MotionPlanningState::pathToExploration) && pointReached && (!Global::updateKDTreeWorking) && (!Global::replanOmegaWorking))
+            {
+                if (Global::currentIndexPath == Global::currentPath.size() - 1)
+                {
+                    Global::planningState = MotionPlanningState::goingToExplore;
+                    //Set Global::currentGoalPosition to a exploration point
+
+                    Global::updateKDTreeWorking = true;
+                    updateKDTree();
+                    Global::updateKDTreeWorking = false;
+                    Global::replanOmegaWorking = true;
+                    replanOmega();
+                    Global::replanOmegaWorking = false;
+
+
+                    // DEBUG
+                    debug_addMessage("Reached last point on the path");
+                    // DEBUG
+                }
+                else
+                {
+                    // DEBUG
+                    debug_addMessage("Reached point " + std::to_string(Global::currentIndexPath));
+                    // DEBUG
+
+                    Global::currentIndexPath++;
+                    Global::currentGoalPosition = Global::currentPath[Global::currentIndexPath]->nodeIn->position;
+                    Global::currentOmega = Global::currentPath[Global::currentIndexPath]->omega;
+                }
+            }
+
+            Global::transitionAlgWorking = false;
         }
     }
 }
@@ -373,6 +451,7 @@ int main(int argc, char **argv)
                 if (Global::planningState == MotionPlanningState::pathToExploration)
                 {
                     ROS_INFO_STREAM("-------PATH TO EXPLORATION-------");
+                    ROS_INFO_STREAM("Point " << Global::currentIndexPath << " of " << (Global::currentPath.size() + 1));
                 }
                 if (Global::planningState == MotionPlanningState::goingToExplore)
                 {

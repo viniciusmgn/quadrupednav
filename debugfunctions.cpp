@@ -38,7 +38,7 @@ namespace CBFCirc
     void debug_Store()
     {
 
-        if (Global::firstPlanCreated &&(Global::generalCounter % Global::param.freqStoreDebug == 0))
+        if (Global::firstPlanCreated && (Global::generalCounter % Global::param.freqStoreDebug == 0))
         {
             DataForDebug dfd;
 
@@ -60,7 +60,7 @@ namespace CBFCirc
             dfd.planningState = Global::planningState;
             dfd.graph = Global::graph;
             dfd.pointsKDTree = Global::pointsKDTree;
-            
+            // dfd.bconstraint = Global::bconstraint;
 
             Global::dataForDebug.push_back(dfd);
         }
@@ -68,7 +68,30 @@ namespace CBFCirc
 
     void debug_addMessage(string msg)
     {
-        Global::messages.push_back(std::to_string(Global::generalCounter)+": "+msg);
+        Global::messages.push_back("'"+std::to_string(Global::generalCounter) + "';'" + msg+"'");
+    }
+
+    void debug_generateManyPathsReport()
+    {
+        debug_addMessage("Omega replanned!");
+        for (int k = 0; k < Global::generateManyPathResult.pathResults.size(); k++)
+        {
+            string pathName = getMatrixName(Global::generateManyPathResult.pathOmega[k]);
+            if (Global::generateManyPathResult.pathResults[k].pathState == PathState::sucess)
+                debug_addMessage("Path " + pathName + " suceeded!");
+
+            if (Global::generateManyPathResult.pathResults[k].pathState == PathState::unfeasible)
+                debug_addMessage("Path " + pathName + " unfeasible!");
+
+            if (Global::generateManyPathResult.pathResults[k].pathState == PathState::timeout)
+            {
+                string errorToGoal = std::to_string(Global::generateManyPathResult.pathResults[k].finalError);
+                string minimumError = std::to_string(Global::param.plannerReachError);
+                debug_addMessage("Path " + pathName + " timeout! Error to path was " + errorToGoal + " but minimum is " + minimumError);
+            }
+        }
+        if ((Global::currentOmega - Global::generateManyPathResult.bestOmega).norm())
+            debug_addMessage("Changed sense of circulation");
     }
 
     void debug_printAlgStateToMatlab(ofstream *f)
@@ -102,12 +125,13 @@ namespace CBFCirc
         *f << "graphNodes = processCell(load([dirData '/graphNodes.csv']));" << std::endl;
         *f << "graphEdges = processCell(load([dirData '/graphEdges.csv']));" << std::endl;
         *f << "pointsKDTree = processCell(load([dirData '/pointsKDTree.csv']));" << std::endl;
+        *f << "messages = load([dirData '/messages.csv']);"<< std::endl;
+        //*f << "bconstraint = load([dirData '/bconstraint.csv']);" << std::endl;
 
         // Write planned paths
         vector<string> names = {};
         for (int k = 0; k < Global::generateManyPathResult.pathOmega.size(); k++)
             names.push_back(getMatrixName(Global::generateManyPathResult.pathOmega[k]));
-        
 
         for (int k = 0; k < names.size(); k++)
         {
@@ -270,27 +294,27 @@ namespace CBFCirc
 
         printVectorsToCSV(f, tempVector);
         f->flush();
-        f->close();      
+        f->close();
 
         // WRITE: current matrix
         f->open("/home/vinicius/Desktop/matlab/unitree_planning/" + fname + "/currentOmega.csv", ofstream::trunc);
         tempDouble = {};
         for (int i = 0; i < Global::dataForDebug.size(); i++)
-            tempDouble.push_back((double) getMatrixNumber(Global::dataForDebug[i].currentOmega));
+            tempDouble.push_back((double)getMatrixNumber(Global::dataForDebug[i].currentOmega));
 
         printVectorsToCSV(f, tempDouble);
         f->flush();
-        f->close();  
+        f->close();
 
         // WRITE: current state of the motion planning
         f->open("/home/vinicius/Desktop/matlab/unitree_planning/" + fname + "/planningState.csv", ofstream::trunc);
         tempDouble = {};
         for (int i = 0; i < Global::dataForDebug.size(); i++)
-            tempDouble.push_back((double) Global::dataForDebug[i].planningState);
+            tempDouble.push_back((double)Global::dataForDebug[i].planningState);
 
         printVectorsToCSV(f, tempDouble);
         f->flush();
-        f->close();  
+        f->close();
 
         // WRITE: graph nodes
         f->open("/home/vinicius/Desktop/matlab/unitree_planning/" + fname + "/graphNodes.csv", ofstream::trunc);
@@ -318,11 +342,10 @@ namespace CBFCirc
                 VectorXd edge = VectorXd::Zero(2);
                 int inNode = Global::dataForDebug[i].graph.edges[j]->nodeIn->id;
                 int outNode = Global::dataForDebug[i].graph.edges[j]->nodeOut->id;
-                edge << (double) inNode, (double) outNode;
+                edge << (double)inNode, (double)outNode;
                 tempVector.push_back(edge);
-
             }
-                
+
             tempVectorVector.push_back(tempVector);
         }
         printVectorVectorsToCSV(f, tempVectorVector, 2);
@@ -344,6 +367,23 @@ namespace CBFCirc
         f->flush();
         f->close();
 
+        // WRITE: messages
+        f->open("/home/vinicius/Desktop/matlab/unitree_planning/" + fname + "/messages.csv", ofstream::trunc);
+        for (int j = 0; j < Global::messages.size(); j++)
+            *f << Global::messages[j] << std::endl;
+        f->flush();
+        f->close();
+
+        // // WRITE: bconstraint
+        // f->open("/home/vinicius/Desktop/matlab/unitree_planning/" + fname + "/bconstraint.csv", ofstream::trunc);
+        // tempVector = {};
+        // for (int i = 0; i < Global::dataForDebug.size(); i++)
+        //     tempVector.push_back(Global::dataForDebug[i].bconstraint);
+
+        // printVectorsToCSV(f, tempVector);
+        // f->flush();
+        // f->close();
+
         // WRITE: planned paths
         double fat = Global::param.sampleStorePath;
         for (int k = 0; k < names.size(); k++)
@@ -353,8 +393,8 @@ namespace CBFCirc
             for (int i = 0; i < Global::dataForDebug.size(); i++)
             {
                 tempVector = {};
-                for (int j = 0; j < Global::dataForDebug[i].generateManyPathResult.pathResults[k].path.size()/fat; j++)
-                    tempVector.push_back(Global::dataForDebug[i].generateManyPathResult.pathResults[k].path[fat*j].position);
+                for (int j = 0; j < Global::dataForDebug[i].generateManyPathResult.pathResults[k].path.size() / fat; j++)
+                    tempVector.push_back(Global::dataForDebug[i].generateManyPathResult.pathResults[k].path[fat * j].position);
 
                 tempVectorVector.push_back(tempVector);
             }
@@ -367,13 +407,13 @@ namespace CBFCirc
             for (int i = 0; i < Global::dataForDebug.size(); i++)
             {
                 tempVector = {};
-                for (int j = 0; j < Global::dataForDebug[i].generateManyPathResult.pathResults[k].path.size()/fat; j++)
+                for (int j = 0; j < Global::dataForDebug[i].generateManyPathResult.pathResults[k].path.size() / fat; j++)
                 {
                     VectorXd data = VectorXd::Ones(1);
-                    data << Global::dataForDebug[i].generateManyPathResult.pathResults[k].path[fat*j].orientation;
+                    data << Global::dataForDebug[i].generateManyPathResult.pathResults[k].path[fat * j].orientation;
                     tempVector.push_back(data);
                 }
-                    
+
                 tempVectorVector.push_back(tempVector);
             }
             printVectorVectorsToCSV(f, tempVectorVector, 1);
@@ -385,8 +425,8 @@ namespace CBFCirc
             for (int i = 0; i < Global::dataForDebug.size(); i++)
             {
                 tempVector = {};
-                for (int j = 0; j < Global::dataForDebug[i].generateManyPathResult.pathResults[k].path.size()/fat; j++)
-                    tempVector.push_back(Global::dataForDebug[i].generateManyPathResult.pathResults[k].pathGradSafetyPosition[fat*j]);
+                for (int j = 0; j < Global::dataForDebug[i].generateManyPathResult.pathResults[k].path.size() / fat; j++)
+                    tempVector.push_back(Global::dataForDebug[i].generateManyPathResult.pathResults[k].pathGradSafetyPosition[fat * j]);
 
                 tempVectorVector.push_back(tempVector);
             }
@@ -399,13 +439,13 @@ namespace CBFCirc
             for (int i = 0; i < Global::dataForDebug.size(); i++)
             {
                 tempVector = {};
-                for (int j = 0; j < Global::dataForDebug[i].generateManyPathResult.pathResults[k].path.size()/fat; j++)
+                for (int j = 0; j < Global::dataForDebug[i].generateManyPathResult.pathResults[k].path.size() / fat; j++)
                 {
                     VectorXd data = VectorXd::Ones(1);
-                    data << Global::dataForDebug[i].generateManyPathResult.pathResults[k].pathGradSafetyOrientation[fat*j];
+                    data << Global::dataForDebug[i].generateManyPathResult.pathResults[k].pathGradSafetyOrientation[fat * j];
                     tempVector.push_back(data);
                 }
-                    
+
                 tempVectorVector.push_back(tempVector);
             }
             printVectorVectorsToCSV(f, tempVectorVector, 1);
@@ -417,19 +457,18 @@ namespace CBFCirc
             for (int i = 0; i < Global::dataForDebug.size(); i++)
             {
                 tempVector = {};
-                for (int j = 0; j < Global::dataForDebug[i].generateManyPathResult.pathResults[k].path.size()/fat; j++)
+                for (int j = 0; j < Global::dataForDebug[i].generateManyPathResult.pathResults[k].path.size() / fat; j++)
                 {
                     VectorXd data = VectorXd::Ones(1);
-                    data << Global::dataForDebug[i].generateManyPathResult.pathResults[k].pathDistance[fat*j];
+                    data << Global::dataForDebug[i].generateManyPathResult.pathResults[k].pathDistance[fat * j];
                     tempVector.push_back(data);
                 }
-                    
+
                 tempVectorVector.push_back(tempVector);
             }
             printVectorVectorsToCSV(f, tempVectorVector, 1);
             f->flush();
             f->close();
-
         }
     }
 

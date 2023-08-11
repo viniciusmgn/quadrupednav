@@ -96,14 +96,15 @@ namespace CBFCirc
         MatrixXd H1 = MatrixXd::Zero(3, 3);
         H1(0, 0) = 1;
         H1(1, 1) = 1;
+        H1(2, 2) = min(max(dr.distance,0.0),5.0); 
         MatrixXd H2 = restvw.transpose() * restvw;
 
         VectorXd ud = vectorVertStack(vd, 0);
 
         MatrixXd H = 2 * (H1 + H2);
         VectorXd f = -2 * ud;
-        MatrixXd A = vectorVertStack(dr.gradSafetyPosition, dr.gradSafetyOrientation).transpose();
-
+        MatrixXd A = MatrixXd::Zero(1,3);
+        A << dr.gradSafetyPosition[0], dr.gradSafetyPosition[1], dr.gradSafetyOrientation;
         VectorXd b = VectorXd::Zero(1);
 
         double cbfConst;
@@ -122,7 +123,10 @@ namespace CBFCirc
         // Add circulation is omega != 0
         if (abs(omega(0, 1)) + abs(omega(1, 2)) + abs(omega(2, 0)) >= VERYSMALLNUMBER)
         {
-            A = matrixVertStack(A, vectorVertStack(omega * dr.gradSafetyPosition, 0).transpose());
+            MatrixXd A2 = MatrixXd::Zero(1,3);
+            VectorXd rotVec = omega * dr.gradSafetyPosition;
+            A2 << rotVec[0], rotVec[1], 0;
+            A = matrixVertStack(A, A2);
             double circConst = param.maxVelCircBeta * (1 - dr.distance / param.distanceMinBeta);
             b = vectorVertStack(b, circConst);
         }
@@ -132,6 +136,8 @@ namespace CBFCirc
         CBFCircControllerResult cccr;
         cccr.distanceResult = dr;
         cccr.linearVelocity = VectorXd::Zero(3);
+        //cccr.bconstraint = A*u;
+
 
         if (u.rows() > 0)
         {
@@ -148,6 +154,8 @@ namespace CBFCirc
             cccr.feasible = false;
         }
 
+
+
         return cccr;
     }
 
@@ -159,7 +167,7 @@ namespace CBFCirc
         bool cont = true;
         double dt;
 
-        gpr.pathState = GeneratePathState::sucess;
+        gpr.pathState = PathState::sucess;
         gpr.path = {};
         gpr.pathGradSafetyPosition = {};
         gpr.pathGradSafetyOrientation = {};
@@ -186,13 +194,13 @@ namespace CBFCirc
                 cont = false;
 
                 if (!cccr.feasible)
-                    gpr.pathState = GeneratePathState::unfeasible;
+                    gpr.pathState = PathState::unfeasible;
             }
             cont = cont && (time < maxTime);
         }
 
         if (time >= maxTime)
-            gpr.pathState = GeneratePathState::timeout;
+            gpr.pathState = PathState::timeout;
 
         gpr.finalError = (gpr.path[gpr.path.size() - 1].position - targetPosition).norm();
 
@@ -223,10 +231,10 @@ namespace CBFCirc
             GeneratePathResult gpr = CBFCircPlanOne(startingPose, targetPosition, querier, gmpr.pathOmega[i], maxTimeTemp, reachpointError, param);
             double distToGoal = (startingPose.position - targetPosition).norm();
             gmpr.pathResults.push_back(gpr);
-            gmpr.pathLenghts.push_back((gpr.pathState == GeneratePathState::sucess) ? curveLength(gpr.path) : VERYBIGNUMBER + distToGoal);
-            gmpr.atLeastOnePathReached = gmpr.atLeastOnePathReached || (gpr.pathState == GeneratePathState::sucess);
+            gmpr.pathLenghts.push_back((gpr.pathState == PathState::sucess) ? curveLength(gpr.path) : VERYBIGNUMBER + distToGoal);
+            gmpr.atLeastOnePathReached = gmpr.atLeastOnePathReached || (gpr.pathState == PathState::sucess);
 
-            if ((gpr.pathState == GeneratePathState::sucess) &&
+            if ((gpr.pathState == PathState::sucess) &&
                 (gmpr.pathLenghts[i] <= param.acceptableRationPlanning * distToGoal))
             {
                 maxTimeTemp = 0.2;

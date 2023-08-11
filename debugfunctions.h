@@ -41,10 +41,13 @@ namespace CBFCirc
         MotionPlanningState planningState;
         Graph graph;
         vector<VectorXd> pointsKDTree;
+        //VectorXd bconstraint;
     };
 
     string getFolderName();
     void debug_Store();
+    void debug_generateManyPathsReport();
     void debug_printAlgStateToMatlab(ofstream *f);
+    
 
 }

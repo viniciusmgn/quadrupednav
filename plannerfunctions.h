@@ -25,10 +25,10 @@ namespace CBFCirc
         double marginSafety = 0.4; // 0.8
         double sensingRadius = 3.0;
 
-        double gainRobotYaw = 4.0; // 2.0
+        double gainRobotYaw = 4.0; // 2.0 4.0
         double gainTargetController = 0.2;
         double alphaCBFPositive = 1.0;
-        double alphaCBFNegative = 7.5;
+        double alphaCBFNegative = 10; //7.5
         double distanceMinBeta = 0.4; // 0.5 0.3
         double maxVelCircBeta = 1.25; // 0.5 0.5
         double maxTotalVel = 0.3;
@@ -36,7 +36,7 @@ namespace CBFCirc
 
         double deltaTimePlanner = 0.2; // 0.1
         double maxTimePlanner = 100;   // 50
-        double plannerReachError = 0.2;
+        double plannerReachError = 0.25;
         double acceptableRationPlanning = 2.0;
 
         int freqStoreDebug = 15;
@@ -84,9 +84,10 @@ namespace CBFCirc
         double angularVelocity;
         DistanceResult distanceResult;
         bool feasible;
+        //VectorXd bconstraint;
     };
 
-    enum class GeneratePathState
+    enum class PathState
     {
         sucess,
         unfeasible,
@@ -100,7 +101,7 @@ namespace CBFCirc
         vector<VectorXd> pathGradSafetyPosition;
         vector<double> pathGradSafetyOrientation;
         vector<double> pathDistance;
-        GeneratePathState pathState;
+        PathState pathState;
         double finalError;
     };
 
