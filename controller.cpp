@@ -21,6 +21,9 @@
 #include <geometry_msgs/Twist.h>
 #include <nav_msgs/Odometry.h>
 #include <boost/filesystem.hpp>
+#include <tf/transform_listener.h>
+#include <octomap_with_query/neighbor_points.h>
+#include <octomap_with_query/frontier_points.h>
 
 #include "std_msgs/String.h"
 
@@ -88,57 +91,153 @@ void setLinearVelocity(VectorXd linearVelocity)
     setTwist(linearVelocity, angularVelocity);
 }
 
-void poseCallback(const nav_msgs::Odometry::ConstPtr &msg)
+// void poseCallback(const nav_msgs::Odometry::ConstPtr &msg)
+// {
+//     Global::position << (*msg).pose.pose.position.x, (*msg).pose.pose.position.y, Global::param.constantHeight;
+
+//     double coshalfv = (*msg).pose.pose.orientation.w;
+//     double sinhalfv = sqrt(pow((*msg).pose.pose.orientation.x, 2) + pow((*msg).pose.pose.orientation.y, 2) + pow((*msg).pose.pose.orientation.z, 2));
+
+//     if ((*msg).pose.pose.orientation.z < 0)
+//         sinhalfv = -sinhalfv;
+
+//     Global::orientation = 2 * atan2(sinhalfv, coshalfv);
+
+//     Global::measured = true;
+// }
+
+void updatePose(const ros::TimerEvent &e)
 {
-    Global::position << (*msg).pose.pose.position.x, (*msg).pose.pose.position.y, Global::param.constantHeight;
 
-    double coshalfv = (*msg).pose.pose.orientation.w;
-    double sinhalfv = sqrt(pow((*msg).pose.pose.orientation.x, 2) + pow((*msg).pose.pose.orientation.y, 2) + pow((*msg).pose.pose.orientation.z, 2));
+    try
+    {
+        Global::tflistener->lookupTransform("fast_lio", "base_link",
+                                            ros::Time(0), *Global::transform);
 
-    if ((*msg).pose.pose.orientation.z < 0)
-        sinhalfv = -sinhalfv;
+        double px = Global::transform->getOrigin().x();
+        double py = Global::transform->getOrigin().y();
+        double pz = Global::transform->getOrigin().z();
 
-    Global::orientation = 2 * atan2(sinhalfv, coshalfv);
+        double x = Global::transform->getRotation().x();
+        double y = Global::transform->getRotation().y();
+        double z = Global::transform->getRotation().z();
+        double w = Global::transform->getRotation().w();
 
-    Global::measured = true;
+        double coshalfv = w;
+        double sinhalfv = sqrt(x * x + y * y + z * z);
+
+        if (z < 0)
+            sinhalfv = -sinhalfv;
+
+        Global::position << px, py, pz;
+        Global::orientation = 2 * atan2(sinhalfv, coshalfv);
+        Global::measured = true;
+    }
+    catch (tf::TransformException ex)
+    {
+        ros::Duration(0.02).sleep();
+    }
 }
 
-vector<VectorXd> createRectangle(double xcenter, double ycenter, double xlength, double ylength, double angRot)
+// vector<VectorXd> createRectangle(double xcenter, double ycenter, double xlength, double ylength, double angRot)
+// {
+//     double SEP = 0.3;
+//     vector<VectorXd> points = {};
+
+//     double C = cos(angRot);
+//     double S = sin(angRot);
+
+//     for (int i = 0; i < round(xlength / SEP); i++)
+//         for (int j = 0; j < round(ylength / SEP); j++)
+//         {
+//             double x = -xlength / 2 + SEP * i;
+//             double y = -ylength / 2 + SEP * j;
+//             double xmod = C * x - S * y + xcenter;
+//             double ymod = -S * x + C * y + ycenter;
+//             VectorXd p = VectorXd::Zero(3);
+//             p << xmod, ymod, Global::param.constantHeight;
+
+//             points.push_back(p);
+//         }
+
+//     return points;
+// }
+
+// vector<VectorXd> allThePoints = {};
+
+
+vector<vector<VectorXd>> getFrontierPoints(VectorXd position)
 {
-    double SEP = 0.3;
-    vector<VectorXd> points = {};
+    vector<vector<VectorXd>> frontierPoints;
+    octomap_with_query::frontier_points srv;
 
-    double C = cos(angRot);
-    double S = sin(angRot);
+    srv.request.z_min = Global::param.constantHeight-0.3;
+    srv.request.z_max = Global::param.constantHeight+0.3;
 
-    for (int i = 0; i < round(xlength / SEP); i++)
-        for (int j = 0; j < round(ylength / SEP); j++)
+    if (Global::frontierClient->call(srv))
+    {
+        int idMax = 0;
+        int idMin = 1000;
+        for (int i = 0; i < srv.response.cluster_id.size(); i++)
         {
-            double x = -xlength / 2 + SEP * i;
-            double y = -ylength / 2 + SEP * j;
-            double xmod = C * x - S * y + xcenter;
-            double ymod = -S * x + C * y + ycenter;
-            VectorXd p = VectorXd::Zero(3);
-            p << xmod, ymod, Global::param.constantHeight;
-
-            points.push_back(p);
+            idMax = srv.response.cluster_id[i] > idMax ? srv.response.cluster_id[i] : idMax;
+            idMin = srv.response.cluster_id[i] < idMin ? srv.response.cluster_id[i] : idMin;
         }
 
-    return points;
+        for (int i = 0; i <= idMax - idMin; i++)
+        {
+            vector<VectorXd> points = {};
+            frontierPoints.push_back(points);
+        }
+
+        for (int i = 0; i < srv.response.frontiers.size(); i++)
+        {
+            VectorXd newPoint = VectorXd::Zero(3);
+            newPoint << srv.response.frontiers[i].x, srv.response.frontiers[i].y, Global::param.constantHeight;
+            frontierPoints[srv.response.cluster_id[i] - idMin].push_back(newPoint);
+        }
+    }
+    return frontierPoints;
 }
 
-vector<VectorXd> allThePoints = {};
-vector<VectorXd> lidarPointSource(VectorXd position, double radius)
+
+vector<VectorXd> getLidarPointsSource(VectorXd position, double radius)
 {
-    vector<VectorXd> points = {};
-    for (int i = 0; i < allThePoints.size(); i++)
-        if ((allThePoints[i] - position).norm() <= radius)
-            points.push_back(allThePoints[i]);
+    // vector<VectorXd> points = {};
+    // for (int i = 0; i < allThePoints.size(); i++)
+    //     if ((allThePoints[i] - position).norm() <= radius)
+    //         points.push_back(allThePoints[i]);
+
+    // return points;
+    vector<VectorXd> points;
+
+    octomap_with_query::neighbor_points srv;
+
+    srv.request.radius = radius;
+    srv.request.query.x = position[0];
+    srv.request.query.y = position[1];
+    srv.request.query.z = position[2];
+
+    int fact = 1;
+
+    if (Global::neighborhClient->call(srv))
+    {
+        for (int i = 0; i < srv.response.neighbors.size() / fact; i++)
+        {
+            double z = srv.response.neighbors[fact * i].z;
+            if (z >= Global::param.constantHeight - 0.3 && z <= Global::param.constantHeight + 0.3)
+            {
+                VectorXd newPoint = VectorXd::Zero(3);
+                newPoint << srv.response.neighbors[fact * i].x, srv.response.neighbors[fact * i].y, Global::param.constantHeight;
+                points.push_back(newPoint);
+            }
+        }
+    }
 
     return points;
 }
 
-vector<VectorXd> getLidarPoints(VectorXd position, double radius)
+vector<VectorXd> getLidarPointsKDTree(VectorXd position, double radius)
 {
 
     vector<VectorXd> points = {};
@@ -175,7 +274,7 @@ void lowLevelMovement()
     {
         if (Global::measured && Global::firstPlanCreated)
         {
-            vector<VectorXd> obsPoints = getLidarPoints(getRobotPose().position, Global::param.sensingRadius);
+            vector<VectorXd> obsPoints = getLidarPointsSource(getRobotPose().position, Global::param.sensingRadius);
             CBFCircControllerResult cccr = CBFCircController(getRobotPose(), Global::currentGoalPosition,
                                                              obsPoints, Global::currentOmega, Global::param);
 
@@ -185,7 +284,7 @@ void lowLevelMovement()
             Global::gradSafetyPosition = cccr.distanceResult.gradSafetyPosition;
             Global::gradSafetyOrientation = cccr.distanceResult.gradSafetyOrientation;
             Global::witnessDistance = cccr.distanceResult.witnessDistance;
-            //Global::bconstraint = cccr.bconstraint;
+            // Global::bconstraint = cccr.bconstraint;
 
             // Send the twist
             setTwist(cccr.linearVelocity, cccr.angularVelocity);
@@ -202,7 +301,7 @@ void replanOmega()
         {
             Global::replanOmegaWorking = true;
 
-            Global::generateManyPathResult = CBFCircPlanMany(getRobotPose(), Global::currentGoalPosition, getLidarPoints,
+            Global::generateManyPathResult = CBFCircPlanMany(getRobotPose(), Global::currentGoalPosition, getLidarPointsKDTree,
                                                              Global::param.maxTimePlanner, Global::param.plannerReachError, Global::param);
 
             // DEBUG
@@ -226,7 +325,7 @@ void updateGraph()
             Global::updateGraphWorking = true;
 
             VectorXd currentPoint = getRobotPose().position;
-            VectorXd correctedPoint = correctPoint(currentPoint, getLidarPoints(getRobotPose().position, Global::param.sensingRadius), Global::param);
+            VectorXd correctedPoint = correctPoint(currentPoint, getLidarPointsKDTree(getRobotPose().position, Global::param.sensingRadius), Global::param);
 
             if (Global::graph.getNeighborNodes(correctedPoint, Global::param.radiusCreateNode).size() == 0)
             {
@@ -240,7 +339,7 @@ void updateGraph()
                     pose.position = Global::graph.nodes[i]->position;
                     pose.orientation = 0;
 
-                    GenerateManyPathsResult gmpr = CBFCircPlanMany(pose, correctedPoint, getLidarPoints,
+                    GenerateManyPathsResult gmpr = CBFCircPlanMany(pose, correctedPoint, getLidarPointsKDTree,
                                                                    Global::param.maxTimePlanConnectNode, Global::param.plannerReachError, Global::param);
                     if (gmpr.atLeastOnePathReached)
                     {
@@ -273,7 +372,7 @@ void updateKDTree()
             Global::mutexUpdateKDTree.lock();
             Global::updateKDTreeWorking = true;
 
-            vector<VectorXd> pointsFromLidar = lidarPointSource(getRobotPose().position, Global::param.sensingRadius);
+            vector<VectorXd> pointsFromLidar = getLidarPointsSource(getRobotPose().position, Global::param.sensingRadius);
 
             for (int i = 0; i < pointsFromLidar.size(); i++)
             {
@@ -341,7 +440,6 @@ void transitionAlg()
                 Global::replanOmegaWorking = true;
                 replanOmega();
                 Global::replanOmegaWorking = false;
-
             }
 
             if ((Global::planningState == MotionPlanningState::pathToExploration) && pointReached && (!Global::updateKDTreeWorking) && (!Global::replanOmegaWorking))
@@ -349,7 +447,7 @@ void transitionAlg()
                 if (Global::currentIndexPath == Global::currentPath.size() - 1)
                 {
                     Global::planningState = MotionPlanningState::goingToExplore;
-                    //Set Global::currentGoalPosition to a exploration point
+                    Global::currentGoalPosition = Global::explorationPosition;
 
                     Global::updateKDTreeWorking = true;
                     updateKDTree();
@@ -358,9 +456,8 @@ void transitionAlg()
                     replanOmega();
                     Global::replanOmegaWorking = false;
 
-
                     // DEBUG
-                    debug_addMessage("Reached last point on the path");
+                    debug_addMessage("Reached last point on the path. Going to explore a frontier...");
                     // DEBUG
                 }
                 else
@@ -387,8 +484,14 @@ int main(int argc, char **argv)
     ros::init(argc, argv, "manager");
     ros::NodeHandle nodeHandler;
     ros::Publisher aux_pubBodyTwist = nodeHandler.advertise<geometry_msgs::Twist>("/cmd_vel", 1);
-    ros::Subscriber subPose = nodeHandler.subscribe("/odom/ground_truth", 1000, poseCallback);
+    // ros::Subscriber subPose = nodeHandler.subscribe("/odom/ground_truth", 1000, poseCallback);
+    ros::ServiceClient neighborhClient = nodeHandler.serviceClient<octomap_with_query::neighbor_points>("/octomap_query_node/neighbor_points");
+    ros::ServiceClient frontierClient = nodeHandler.serviceClient<octomap_with_query::frontier_points>("/octomap_query_node/frontier_points");
+    tf::TransformListener tflistener;
+    tf::StampedTransform transform;
     ros::Rate rate(100);
+    ros::Timer updatePoseTimer;
+    updatePoseTimer = nodeHandler.createTimer(ros::Duration(0.01), updatePose);
 
     // Initialize some global variables
     Global::pubBodyTwist = &aux_pubBodyTwist;
@@ -397,41 +500,46 @@ int main(int argc, char **argv)
     Global::currentOmega = Matrix3d::Zero();
     VectorXd startingPosition = vec3d(0, 0, Global::param.constantHeight);
     Global::graph.addNode(startingPosition);
+    Global::neighborhClient = &neighborhClient;
+    Global::frontierClient = &frontierClient;
+    Global::tflistener = &tflistener;
+    Global::transform = &transform;
 
     //
 
-    vector<VectorXd> obs1 = createRectangle(4, 1.5 + 0.8 + 4, 1, 8, 0);
-    vector<VectorXd> obs2 = createRectangle(4, 1.5 - 0.8 - 4, 1, 8, 0);
+    // vector<VectorXd> obs1 = createRectangle(4, 1.5 + 0.8 + 4, 1, 8, 0);
+    // vector<VectorXd> obs2 = createRectangle(4, 1.5 - 0.8 - 4, 1, 8, 0);
 
-    vector<VectorXd> obs3 = createRectangle(6.5, -1.5 + 0.8 + 7, 1, 14, 0);
-    vector<VectorXd> obs4 = createRectangle(6.5, -1.5 - 0.8 - 3, 1, 6, 0);
+    // vector<VectorXd> obs3 = createRectangle(6.5, -1.5 + 0.8 + 7, 1, 14, 0);
+    // vector<VectorXd> obs4 = createRectangle(6.5, -1.5 - 0.8 - 3, 1, 6, 0);
 
-    vector<VectorXd> obs5 = createRectangle(1, -6.8, 10, 1, 0);
-    vector<VectorXd> obs6 = createRectangle(1, 10, 10, 1, 0);
+    // vector<VectorXd> obs5 = createRectangle(1, -6.8, 10, 1, 0);
+    // vector<VectorXd> obs6 = createRectangle(1, 10, 10, 1, 0);
 
-    for (int i = 0; i < obs1.size(); i++)
-        allThePoints.push_back(obs1[i]);
+    // for (int i = 0; i < obs1.size(); i++)
+    //     allThePoints.push_back(obs1[i]);
 
-    for (int i = 0; i < obs2.size(); i++)
-        allThePoints.push_back(obs2[i]);
+    // for (int i = 0; i < obs2.size(); i++)
+    //     allThePoints.push_back(obs2[i]);
 
-    for (int i = 0; i < obs3.size(); i++)
-        allThePoints.push_back(obs3[i]);
+    // for (int i = 0; i < obs3.size(); i++)
+    //     allThePoints.push_back(obs3[i]);
 
-    for (int i = 0; i < obs4.size(); i++)
-        allThePoints.push_back(obs4[i]);
+    // for (int i = 0; i < obs4.size(); i++)
+    //     allThePoints.push_back(obs4[i]);
 
-    for (int i = 0; i < obs5.size(); i++)
-        allThePoints.push_back(obs5[i]);
+    // for (int i = 0; i < obs5.size(); i++)
+    //     allThePoints.push_back(obs5[i]);
 
-    for (int i = 0; i < obs6.size(); i++)
-        allThePoints.push_back(obs6[i]);
+    // for (int i = 0; i < obs6.size(); i++)
+    //     allThePoints.push_back(obs6[i]);
 
     // Initialize some threads
     std::thread lowLevelMovementThread = thread(lowLevelMovement);
     std::thread replanOmegaThread = thread(replanOmega);
     std::thread updateGraphThread = thread(updateGraph);
     std::thread updateKDTreeThread = thread(updateKDTree);
+    std::thread transitionAlgThread = thread(transitionAlg);
 
     while (ros::ok() && Global::continueAlgorithm)
     {
@@ -442,7 +550,7 @@ int main(int argc, char **argv)
 
             Global::generalCounter++;
 
-            if (Global::generalCounter % 50 == 0)
+            if (Global::generalCounter % Global::param.freqDisplayMessage == 0)
             {
                 if (Global::planningState == MotionPlanningState::goingToGlobalGoal)
                 {
@@ -461,7 +569,7 @@ int main(int argc, char **argv)
                 // ROS_INFO_STREAM("linvelocity = " << printVector(Global::desLinVelocity));
                 // ROS_INFO_STREAM("angvelocity = " << Global::desAngVelocity);
                 ROS_INFO_STREAM("distobs = " << Global::distance);
-                ROS_INFO_STREAM("safety = " << Global::safety);
+                // ROS_INFO_STREAM("safety = " << Global::safety);
                 ROS_INFO_STREAM("distgoal = " << (getRobotPose().position - Global::currentGoalPosition).norm());
                 ROS_INFO_STREAM("omega = " << getMatrixName(Global::currentOmega));
             }
@@ -470,8 +578,6 @@ int main(int argc, char **argv)
             debug_addMessage("Periodic storage");
             debug_Store();
             // DEBUG
-
-            Global::continueAlgorithm = (getRobotPose().position - Global::currentGoalPosition).norm() >= 0.3;
         }
 
         rate.sleep();
@@ -481,6 +587,7 @@ int main(int argc, char **argv)
     replanOmegaThread.join();
     updateGraphThread.join();
     updateKDTreeThread.join();
+    transitionAlgThread.join();
 
     ofstream file;
     debug_printAlgStateToMatlab(&file);

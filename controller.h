@@ -3,6 +3,9 @@
 #include <fstream>
 #include <sstream>
 
+#include <ros/ros.h>
+#include <tf/transform_listener.h>
+
 #include <iostream>
 #include <eigen3/Eigen/Core>
 #include <eigen3/Eigen/Dense>
@@ -74,8 +77,13 @@ public:
     inline static vector<DataForDebug> dataForDebug = {};
     inline static Parameters param;
     inline static vector<Edge *> currentPath = {};
-    inline static int currentIndexPath = {};  
+    inline static int currentIndexPath = {};
+    inline static VectorXd explorationPosition = VectorXd::Zero(3);  
     //inline static VectorXd bconstraint = VectorXd::Zero(3);
+    inline static ros::ServiceClient* neighborhClient;
+    inline static ros::ServiceClient* frontierClient;
+    inline static tf::TransformListener* tflistener;
+    inline static tf::StampedTransform* transform;
 
 
     inline static bool replanOmegaWorking = false;
@@ -88,4 +96,5 @@ public:
 
 double getTime();
 RobotPose getRobotPose();
-vector<VectorXd> getLidarPoints(VectorXd position, double radius);
+vector<VectorXd> getLidarPointsKDTree(VectorXd position, double radius);
+vector<vector<VectorXd>> getFrontierPoints(VectorXd position);

@@ -41,6 +41,7 @@ namespace CBFCirc
         MotionPlanningState planningState;
         Graph graph;
         vector<VectorXd> pointsKDTree;
+        vector<vector<VectorXd>> pointsFrontier;
         //VectorXd bconstraint;
     };
 

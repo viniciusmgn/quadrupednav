@@ -53,13 +53,14 @@ namespace CBFCirc
             dfd.gradSafetyPosition = Global::gradSafetyPosition;
             dfd.gradSafetyOrientation = Global::gradSafetyOrientation;
             dfd.witnessDistance = Global::witnessDistance;
-            dfd.currentLidarPoints = getLidarPoints(getRobotPose().position, Global::param.sensingRadius);
+            dfd.currentLidarPoints = getLidarPointsKDTree(getRobotPose().position, Global::param.sensingRadius);
             dfd.currentGoalPosition = Global::currentGoalPosition;
             dfd.generateManyPathResult = Global::generateManyPathResult;
             dfd.currentOmega = Global::currentOmega;
             dfd.planningState = Global::planningState;
             dfd.graph = Global::graph;
             dfd.pointsKDTree = Global::pointsKDTree;
+            dfd.pointsFrontier = getFrontierPoints(getRobotPose().position);
             // dfd.bconstraint = Global::bconstraint;
 
             Global::dataForDebug.push_back(dfd);
@@ -68,7 +69,7 @@ namespace CBFCirc
 
     void debug_addMessage(string msg)
     {
-        Global::messages.push_back("'"+std::to_string(Global::generalCounter) + "';'" + msg+"'");
+        Global::messages.push_back(std::to_string(Global::generalCounter) + ";" + msg);
     }
 
     void debug_generateManyPathsReport()
@@ -125,7 +126,8 @@ namespace CBFCirc
         *f << "graphNodes = processCell(load([dirData '/graphNodes.csv']));" << std::endl;
         *f << "graphEdges = processCell(load([dirData '/graphEdges.csv']));" << std::endl;
         *f << "pointsKDTree = processCell(load([dirData '/pointsKDTree.csv']));" << std::endl;
-        *f << "messages = load([dirData '/messages.csv']);"<< std::endl;
+        *f << "pointsFrontier = processCell(load([dirData '/pointsFrontier.csv']));" << std::endl;
+        *f << "messages = readtable([dirData '/messages.csv']);"<< std::endl;
         //*f << "bconstraint = load([dirData '/bconstraint.csv']);" << std::endl;
 
         // Write planned paths
@@ -360,6 +362,22 @@ namespace CBFCirc
             tempVector = {};
             for (int j = 0; j < Global::dataForDebug[i].pointsKDTree.size(); j++)
                 tempVector.push_back(Global::dataForDebug[i].pointsKDTree[j]);
+
+            tempVectorVector.push_back(tempVector);
+        }
+        printVectorVectorsToCSV(f, tempVectorVector, 3);
+        f->flush();
+        f->close();
+
+        // WRITE: points frontier
+        f->open("/home/vinicius/Desktop/matlab/unitree_planning/" + fname + "/pointsFrontier.csv", ofstream::trunc);
+        tempVectorVector = {};
+        for (int i = 0; i < Global::dataForDebug.size(); i++)
+        {
+            tempVector = {};
+            for (int j = 0; j < Global::dataForDebug[i].pointsFrontier.size(); j++)
+                for(int k=0; k < Global::dataForDebug[i].pointsFrontier[j].size(); k++)
+                    tempVector.push_back(Global::dataForDebug[i].pointsFrontier[j][k]);
 
             tempVectorVector.push_back(tempVector);
         }

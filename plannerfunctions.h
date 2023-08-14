@@ -21,9 +21,9 @@ namespace CBFCirc
         double boundingHeight = 1.4;
         double smoothingParam = 0.5; // 0.1 0.3
 
-        double constantHeight = 0.8;
+        double constantHeight = -0.1725; //0.8
         double marginSafety = 0.4; // 0.8
-        double sensingRadius = 3.0;
+        double sensingRadius = 5.0; //3.0
 
         double gainRobotYaw = 4.0; // 2.0 4.0
         double gainTargetController = 0.2;
@@ -43,6 +43,7 @@ namespace CBFCirc
         int freqReplanPath = 500;
         int freqUpdateGraph = 500;
         int freqUpdateKDTree = 100;
+        int freqDisplayMessage = 50;
 
         double noMaxIterationsCorrectPoint = 20;
         double stepCorrectPoint = 0.1;

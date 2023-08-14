@@ -68,7 +68,7 @@ namespace CBFCirc
         vector<Node *> getNeighborNodes(VectorXd position, double radius);
         Node *getNearestNode(VectorXd position);
         vector<Node *> getNearestNodeList(VectorXd position);
-        SampleNewTargetResult sampleNewTarget(RobotPose pose, MapQuerier querier, vector<vector<VectorXd>> frontier, Parameters param);
+        SampleNewTargetResult getNewExplorationPoint(RobotPose pose, MapQuerier querier, vector<vector<VectorXd>> frontier, Parameters param);
         vector<Edge *> getPath(Node *origin, Node *target);
     };
 

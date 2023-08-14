@@ -131,7 +131,7 @@ namespace CBFCirc
         return d;
     }
 
-    SampleNewTargetResult Graph::sampleNewTarget(RobotPose pose, MapQuerier querier, vector<vector<VectorXd>> frontier, Parameters param)
+    SampleNewTargetResult Graph::getNewExplorationPoint(RobotPose pose, MapQuerier querier, vector<vector<VectorXd>> frontier, Parameters param)
     {
 
         SampleNewTargetResult sntr;
