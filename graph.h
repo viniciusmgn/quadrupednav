@@ -43,16 +43,15 @@ namespace CBFCirc
         Edge();
     };
 
-    struct SampleNewTargetResult
+    struct NewExplorationPointResult
     {
-        vector<VectorXd> points;
-        vector<VectorXd> path;
-        vector<int> index;
         vector<double> value;
-        VectorXd bestq;
-        double bestValue;
-        int indNode;
-        Matrix3d omega;
+        vector<VectorXd> points;
+        vector<int> index;
+        
+        VectorXd bestExplorationPosition;
+        Matrix3d bestOmega;
+        vector<Edge *> pathToExplorationPoint;
         bool success;
     };
 
@@ -68,7 +67,7 @@ namespace CBFCirc
         vector<Node *> getNeighborNodes(VectorXd position, double radius);
         Node *getNearestNode(VectorXd position);
         vector<Node *> getNearestNodeList(VectorXd position);
-        SampleNewTargetResult getNewExplorationPoint(RobotPose pose, MapQuerier querier, vector<vector<VectorXd>> frontier, Parameters param);
+        NewExplorationPointResult getNewExplorationPoint(RobotPose pose, MapQuerier querier, vector<vector<VectorXd>> frontier, Parameters param);
         vector<Edge *> getPath(Node *origin, Node *target);
     };
 

@@ -36,7 +36,7 @@ namespace CBFCirc
         for (int i = 0; i < points.size(); i++)
         {
             // Transform point
-            
+
             x = points[i][0] - pose.position[0];
             y = points[i][1] - pose.position[1];
             z = points[i][2] - pose.position[2];
@@ -55,7 +55,7 @@ namespace CBFCirc
             }
 
             // Compute gradient of the safety on position
-            
+
             x = sr.gradSafety[0];
             y = sr.gradSafety[1];
             z = sr.gradSafety[2];
@@ -81,14 +81,14 @@ namespace CBFCirc
     {
         DistanceResult dr = computeDist(neighborPoints, pose, param);
 
-        VectorXd vd3d = -param.gainTargetController * (pose.position - targetPosition);
+        double mult = max(1 - dr.distance / 0.1, 0.0);
+        VectorXd vtg1 = 0.5 * dr.gradSafetyPosition;
+        VectorXd vtg2 = -param.gainTargetController * (pose.position - targetPosition);
+        //VectorXd vd3d = mult * vtg1 + (1-mult) * vtg2;
+        VectorXd vd3d = vtg2;
         VectorXd vd = VectorXd::Zero(2);
         vd << vd3d[0], vd3d[1];
 
-        // Vector2d dir;
-        // dir << cos(pose.orientation), sin(pose.orientation);
-        // VectorXd normVelocity = vd.normalized();
-        // double wd = param.gainRobotYaw * (dir[0] * normVelocity[1] - dir[1] * normVelocity[0]);
         MatrixXd restvw = MatrixXd::Zero(1, 3);
         restvw(0, 0) = -param.gainRobotYaw * sin(pose.orientation);
         restvw(0, 1) = param.gainRobotYaw * cos(pose.orientation);
@@ -96,23 +96,18 @@ namespace CBFCirc
         MatrixXd H1 = MatrixXd::Zero(3, 3);
         H1(0, 0) = 1;
         H1(1, 1) = 1;
-        H1(2, 2) = min(max(dr.distance,0.0),5.0); 
+        H1(2, 2) = min(max(dr.distance, 0.0), 5.0);
         MatrixXd H2 = restvw.transpose() * restvw;
 
         VectorXd ud = vectorVertStack(vd, 0);
 
         MatrixXd H = 2 * (H1 + H2);
         VectorXd f = -2 * ud;
-        MatrixXd A = MatrixXd::Zero(1,3);
+        MatrixXd A = MatrixXd::Zero(1, 3);
         A << dr.gradSafetyPosition[0], dr.gradSafetyPosition[1], dr.gradSafetyOrientation;
         VectorXd b = VectorXd::Zero(1);
 
         double cbfConst;
-        // if (dr.safety > 0)
-        //     cbfConst = -param.alphaCBFPositive * (dr.safety);
-        // else
-        //     cbfConst = -param.alphaCBFNegative * (dr.safety);
-
         if (dr.distance - param.distanceMargin > 0)
             cbfConst = -param.alphaCBFPositive * (dr.distance - param.distanceMargin);
         else
@@ -123,7 +118,7 @@ namespace CBFCirc
         // Add circulation is omega != 0
         if (abs(omega(0, 1)) + abs(omega(1, 2)) + abs(omega(2, 0)) >= VERYSMALLNUMBER)
         {
-            MatrixXd A2 = MatrixXd::Zero(1,3);
+            MatrixXd A2 = MatrixXd::Zero(1, 3);
             VectorXd rotVec = omega * dr.gradSafetyPosition;
             A2 << rotVec[0], rotVec[1], 0;
             A = matrixVertStack(A, A2);
@@ -136,8 +131,6 @@ namespace CBFCirc
         CBFCircControllerResult cccr;
         cccr.distanceResult = dr;
         cccr.linearVelocity = VectorXd::Zero(3);
-        //cccr.bconstraint = A*u;
-
 
         if (u.rows() > 0)
         {
@@ -153,8 +146,6 @@ namespace CBFCirc
             cccr.angularVelocity = 0;
             cccr.feasible = false;
         }
-
-
 
         return cccr;
     }
@@ -268,7 +259,7 @@ namespace CBFCirc
 
         return rdr;
     }
-    
+
     VectorXd correctPoint(VectorXd point, vector<VectorXd> neighborPoints, Parameters param)
     {
 

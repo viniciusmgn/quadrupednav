@@ -35,64 +35,67 @@ namespace CBFCirc
         return str;
     }
 
-    void debug_Store()
+    void debug_Store(int counter)
     {
 
-        if (Global::firstPlanCreated && (Global::generalCounter % Global::param.freqStoreDebug == 0))
-        {
-            DataForDebug dfd;
+        DataForDebug dfd;
 
-            dfd.generalCounter = Global::generalCounter;
-            dfd.timeStamp = getTime();
-            dfd.position = getRobotPose().position;
-            dfd.orientation = getRobotPose().orientation;
-            dfd.desLinVelocity = Global::desLinVelocity;
-            dfd.desAngVelocity = Global::desAngVelocity;
-            dfd.distance = Global::distance;
-            dfd.safety = Global::safety;
-            dfd.gradSafetyPosition = Global::gradSafetyPosition;
-            dfd.gradSafetyOrientation = Global::gradSafetyOrientation;
-            dfd.witnessDistance = Global::witnessDistance;
-            dfd.currentLidarPoints = getLidarPointsKDTree(getRobotPose().position, Global::param.sensingRadius);
-            dfd.currentGoalPosition = Global::currentGoalPosition;
-            dfd.generateManyPathResult = Global::generateManyPathResult;
-            dfd.currentOmega = Global::currentOmega;
-            dfd.planningState = Global::planningState;
-            dfd.graph = Global::graph;
-            dfd.pointsKDTree = Global::pointsKDTree;
-            dfd.pointsFrontier = getFrontierPoints(getRobotPose().position);
-            // dfd.bconstraint = Global::bconstraint;
-
-            Global::dataForDebug.push_back(dfd);
-        }
+        dfd.generalCounter = counter;
+        dfd.timeStamp = getTime();
+        dfd.position = getRobotPose().position;
+        dfd.orientation = getRobotPose().orientation;
+        dfd.desLinVelocity = Global::desLinVelocity;
+        dfd.desAngVelocity = Global::desAngVelocity;
+        dfd.distance = Global::distance;
+        dfd.safety = Global::safety;
+        dfd.gradSafetyPosition = Global::gradSafetyPosition;
+        dfd.gradSafetyOrientation = Global::gradSafetyOrientation;
+        dfd.witnessDistance = Global::witnessDistance;
+        dfd.currentLidarPoints = getLidarPointsSource(getRobotPose().position, Global::param.sensingRadius);
+        dfd.currentLidarPointsKDTree = getLidarPointsKDTree(getRobotPose().position, Global::param.sensingRadius);
+        dfd.currentGoalPosition = Global::currentGoalPosition;
+        dfd.generateManyPathResult = Global::generateManyPathResult;
+        dfd.currentOmega = Global::currentOmega;
+        dfd.planningState = Global::planningState;
+        dfd.graph = Global::graph;
+        dfd.pointsKDTree = Global::pointsKDTree;
+        dfd.pointsFrontier = getFrontierPoints();
+        dfd.currentPath = Global::currentPath;
+        dfd.currentIndexPath = Global::currentIndexPath;
+        dfd.explorationPosition = Global::explorationPosition;
+        Global::dataForDebug.push_back(dfd);
     }
 
-    void debug_addMessage(string msg)
+    void debug_addMessage(int counter, string msg)
     {
-        Global::messages.push_back(std::to_string(Global::generalCounter) + ";" + msg);
+        Global::messages.push_back(std::to_string(counter) + ";" + msg);
     }
 
-    void debug_generateManyPathsReport()
+    void debug_generateManyPathsReport(int counter)
     {
-        debug_addMessage("Omega replanned!");
+        debug_addMessage(counter, "Omega replanned!");
         for (int k = 0; k < Global::generateManyPathResult.pathResults.size(); k++)
         {
             string pathName = getMatrixName(Global::generateManyPathResult.pathOmega[k]);
             if (Global::generateManyPathResult.pathResults[k].pathState == PathState::sucess)
-                debug_addMessage("Path " + pathName + " suceeded!");
+                debug_addMessage(counter, "Path " + pathName + " suceeded!");
 
             if (Global::generateManyPathResult.pathResults[k].pathState == PathState::unfeasible)
-                debug_addMessage("Path " + pathName + " unfeasible!");
+                debug_addMessage(counter, "Path " + pathName + " unfeasible!");
 
             if (Global::generateManyPathResult.pathResults[k].pathState == PathState::timeout)
             {
                 string errorToGoal = std::to_string(Global::generateManyPathResult.pathResults[k].finalError);
                 string minimumError = std::to_string(Global::param.plannerReachError);
-                debug_addMessage("Path " + pathName + " timeout! Error to path was " + errorToGoal + " but minimum is " + minimumError);
+                debug_addMessage(counter, "Path " + pathName + " timeout! Error to path was " + errorToGoal + " but minimum is " + minimumError);
             }
         }
-        if ((Global::currentOmega - Global::generateManyPathResult.bestOmega).norm())
-            debug_addMessage("Changed sense of circulation");
+        if (Global::generateManyPathResult.atLeastOnePathReached)
+        {
+            if (((Global::currentOmega - Global::generateManyPathResult.bestOmega).norm() > VERYSMALLNUMBER))
+                debug_addMessage(counter, "Changed sense of circulation");
+        }
+        
     }
 
     void debug_printAlgStateToMatlab(ofstream *f)
@@ -121,14 +124,17 @@ namespace CBFCirc
         *f << "witnessDistance = load([dirData '/witnessDistance.csv']);" << std::endl;
         *f << "currentGoalPosition = load([dirData '/currentGoalPosition.csv']);" << std::endl;
         *f << "currentLidarPoints = processCell(load([dirData '/currentLidarPoints.csv']));" << std::endl;
+        *f << "currentLidarPointsKDTree = processCell(load([dirData '/currentLidarPointsKDTree.csv']));" << std::endl;
         *f << "currentOmega = load([dirData '/currentOmega.csv']);" << std::endl;
         *f << "planningState = load([dirData '/planningState.csv']);" << std::endl;
         *f << "graphNodes = processCell(load([dirData '/graphNodes.csv']));" << std::endl;
         *f << "graphEdges = processCell(load([dirData '/graphEdges.csv']));" << std::endl;
         *f << "pointsKDTree = processCell(load([dirData '/pointsKDTree.csv']));" << std::endl;
         *f << "pointsFrontier = processCell(load([dirData '/pointsFrontier.csv']));" << std::endl;
-        *f << "messages = readtable([dirData '/messages.csv']);"<< std::endl;
-        //*f << "bconstraint = load([dirData '/bconstraint.csv']);" << std::endl;
+        *f << "currentPath = processCell(load([dirData '/currentPath.csv']));" << std::endl;
+        *f << "currentIndexPath = load([dirData '/currentIndexPath.csv']);" << std::endl;
+        *f << "explorationPosition = load([dirData '/explorationPosition.csv']);" << std::endl;
+        *f << "messages = processMessageTable(readtable([dirData '/messages.csv']),generalCounter);" << std::endl;
 
         // Write planned paths
         vector<string> names = {};
@@ -288,6 +294,21 @@ namespace CBFCirc
         f->flush();
         f->close();
 
+        // WRITE: current lidar points from KD Tree
+        f->open("/home/vinicius/Desktop/matlab/unitree_planning/" + fname + "/currentLidarPointsKDTree.csv", ofstream::trunc);
+        tempVectorVector = {};
+        for (int i = 0; i < Global::dataForDebug.size(); i++)
+        {
+            tempVector = {};
+            for (int j = 0; j < Global::dataForDebug[i].currentLidarPointsKDTree.size(); j++)
+                tempVector.push_back(Global::dataForDebug[i].currentLidarPointsKDTree[j]);
+
+            tempVectorVector.push_back(tempVector);
+        }
+        printVectorVectorsToCSV(f, tempVectorVector, 3);
+        f->flush();
+        f->close();
+
         // WRITE: current goal position
         f->open("/home/vinicius/Desktop/matlab/unitree_planning/" + fname + "/currentGoalPosition.csv", ofstream::trunc);
         tempVector = {};
@@ -376,12 +397,55 @@ namespace CBFCirc
         {
             tempVector = {};
             for (int j = 0; j < Global::dataForDebug[i].pointsFrontier.size(); j++)
-                for(int k=0; k < Global::dataForDebug[i].pointsFrontier[j].size(); k++)
+                for (int k = 0; k < Global::dataForDebug[i].pointsFrontier[j].size(); k++)
                     tempVector.push_back(Global::dataForDebug[i].pointsFrontier[j][k]);
 
             tempVectorVector.push_back(tempVector);
         }
         printVectorVectorsToCSV(f, tempVectorVector, 3);
+        f->flush();
+        f->close();
+
+        // WRITE: path in the graph
+        f->open("/home/vinicius/Desktop/matlab/unitree_planning/" + fname + "/currentPath.csv", ofstream::trunc);
+        tempVectorVector = {};
+        for (int i = 0; i < Global::dataForDebug.size(); i++)
+        {
+            tempVector = {};
+            for (int j = 0; j < Global::dataForDebug[i].currentPath.size(); j++)
+            {
+                VectorXd ind = VectorXd::Zero(1);
+                ind << (double)Global::dataForDebug[i].currentPath[j]->nodeIn->id;
+                tempVector.push_back(ind);
+            }
+
+            tempVectorVector.push_back(tempVector);
+        }
+        printVectorVectorsToCSV(f, tempVectorVector, 1);
+        f->flush();
+        f->close();
+
+        // WRITE: current index in the path
+        f->open("/home/vinicius/Desktop/matlab/unitree_planning/" + fname + "/currentIndexPath.csv", ofstream::trunc);
+        tempVector = {};
+        for (int i = 0; i < Global::dataForDebug.size(); i++)
+        {
+            VectorXd ind = VectorXd::Zero(1);
+            ind << (double)Global::dataForDebug[i].currentIndexPath;
+            tempVector.push_back(ind);
+        }
+
+        printVectorsToCSV(f, tempVector);
+        f->flush();
+        f->close();
+
+        // WRITE: current exploration position
+        f->open("/home/vinicius/Desktop/matlab/unitree_planning/" + fname + "/explorationPosition.csv", ofstream::trunc);
+        tempVector = {};
+        for (int i = 0; i < Global::dataForDebug.size(); i++)
+            tempVector.push_back(Global::dataForDebug[i].explorationPosition);
+
+        printVectorsToCSV(f, tempVector);
         f->flush();
         f->close();
 

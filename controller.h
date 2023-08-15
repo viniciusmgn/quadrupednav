@@ -74,22 +74,25 @@ public:
     inline static Kdtree::KdTree *kdTree;
     inline static vector<VectorXd> pointsKDTree = {};
     inline static mutex mutexUpdateKDTree;
+    inline static mutex mutexReplanOmega;
+    inline static mutex mutexUpdateGraph;
     inline static vector<DataForDebug> dataForDebug = {};
     inline static Parameters param;
     inline static vector<Edge *> currentPath = {};
-    inline static int currentIndexPath = {};
+    inline static int currentIndexPath = -1;
     inline static VectorXd explorationPosition = VectorXd::Zero(3);  
     //inline static VectorXd bconstraint = VectorXd::Zero(3);
     inline static ros::ServiceClient* neighborhClient;
     inline static ros::ServiceClient* frontierClient;
     inline static tf::TransformListener* tflistener;
     inline static tf::StampedTransform* transform;
+    inline static bool safetyMode = false;
 
 
-    inline static bool replanOmegaWorking = false;
-    inline static bool updateGraphWorking = false;
-    inline static bool updateKDTreeWorking = false;
-    inline static bool transitionAlgWorking = false;
+    //inline static bool replanOmegaWorking = false;
+    //inline static bool updateGraphWorking = false;
+    //inline static bool updateKDTreeWorking = false;
+    //inline static bool transitionAlgWorking = false;
 };
 
 
@@ -97,4 +100,6 @@ public:
 double getTime();
 RobotPose getRobotPose();
 vector<VectorXd> getLidarPointsKDTree(VectorXd position, double radius);
-vector<vector<VectorXd>> getFrontierPoints(VectorXd position);
+vector<VectorXd> getLidarPointsSource(VectorXd position, double radius);
+vector<vector<VectorXd>> getFrontierPoints();
+void updateGraphCall();

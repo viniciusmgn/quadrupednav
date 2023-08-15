@@ -35,6 +35,7 @@ namespace CBFCirc
         double gradSafetyOrientation;
         VectorXd witnessDistance;
         vector<VectorXd> currentLidarPoints;
+        vector<VectorXd> currentLidarPointsKDTree;
         VectorXd currentGoalPosition;
         GenerateManyPathsResult generateManyPathResult;
         Matrix3d currentOmega;
@@ -42,12 +43,17 @@ namespace CBFCirc
         Graph graph;
         vector<VectorXd> pointsKDTree;
         vector<vector<VectorXd>> pointsFrontier;
+        vector<Edge *> currentPath;
+        int currentIndexPath;
+        VectorXd explorationPosition;
+
         //VectorXd bconstraint;
     };
 
     string getFolderName();
-    void debug_Store();
-    void debug_generateManyPathsReport();
+    void debug_addMessage(int counter, string msg);
+    void debug_Store(int counter);
+    void debug_generateManyPathsReport(int counter);
     void debug_printAlgStateToMatlab(ofstream *f);
     
 

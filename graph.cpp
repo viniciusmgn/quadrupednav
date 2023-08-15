@@ -131,10 +131,10 @@ namespace CBFCirc
         return d;
     }
 
-    SampleNewTargetResult Graph::getNewExplorationPoint(RobotPose pose, MapQuerier querier, vector<vector<VectorXd>> frontier, Parameters param)
+    NewExplorationPointResult Graph::getNewExplorationPoint(RobotPose pose, MapQuerier querier, vector<vector<VectorXd>> frontier, Parameters param)
     {
 
-        SampleNewTargetResult sntr;
+        NewExplorationPointResult sntr;
         vector<double> valueUnsorted = {};
         vector<VectorXd> pointUnsorted = {};
         vector<int> indexGraphUnsorted = {};
@@ -189,7 +189,7 @@ namespace CBFCirc
                 {
                     vector<Node *> closestNodesToBestPoint = getNearestNodeList(bestPoint);
 
-                    Node *bestNode;
+                    Node *bestNodeToExploration;
                     double bestValue = VERYBIGNUMBER;
                     Matrix3d bestOmega;
                     int jmax = (closestNodesToBestPoint.size() < param.noTriesClosestPoint) ? closestNodesToBestPoint.size() : param.noTriesClosestPoint;
@@ -207,7 +207,7 @@ namespace CBFCirc
                         {
                             bestValue = gmpr1.bestPathSize;
                             bestOmega = gmpr1.bestOmega;
-                            bestNode = nodeTry;
+                            bestNodeToExploration = nodeTry;
                         }
                     }
 
@@ -220,13 +220,13 @@ namespace CBFCirc
                                                                         param.maxTimeSampleExploration, param.plannerReachError, param);
 
                         double dist1 = (closestNodeToPosition->position - pose.position).norm();
-                        double dist2 = computeDistPath(getPath(closestNodeToPosition, bestNode));
+                        double dist2 = computeDistPath(getPath(closestNodeToPosition, bestNodeToExploration));
                         double dist3 = bestValue;
                         double dist4 = gmpr2.bestPathSize;
 
                         pointUnsorted.push_back(bestPoint);
                         valueUnsorted.push_back(dist1 + dist2 + dist3 + dist4);
-                        indexGraphUnsorted.push_back(bestNode->id);
+                        indexGraphUnsorted.push_back(bestNodeToExploration->id);
                         omegaUnsorted.push_back(bestOmega);
                     }
                 }
@@ -246,13 +246,15 @@ namespace CBFCirc
                     sntr.index.push_back(indexGraphUnsorted[ind[i]]);
                 }
 
-                sntr.omega = omegaUnsorted[ind[0]];
-                sntr.indNode = sntr.index[0];
-                sntr.bestq = sntr.points[0];
-                sntr.success = true;
-                sntr.bestValue = sntr.value[0];
 
-                ROS_INFO_STREAM("SUCCESS: Point found, best value: " << sntr.bestValue);
+                //sntr.indexClosestNode = sntr.index[0];
+                sntr.bestExplorationPosition = sntr.points[0];
+                sntr.pathToExplorationPoint = getPath(closestNodeToPosition, this->nodes[sntr.index[0]]);
+                sntr.bestOmega = omegaUnsorted[sntr.index[0]];
+                sntr.success = true;
+
+
+                ROS_INFO_STREAM("SUCCESS: Point found!");
             }
             else
             {

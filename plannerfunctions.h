@@ -17,7 +17,7 @@ namespace CBFCirc
 
     struct Parameters
     {
-        double boundingRadius = 0.3;
+        double boundingRadius = 0.30; //0.3
         double boundingHeight = 1.4;
         double smoothingParam = 0.5; // 0.1 0.3
 
@@ -26,23 +26,23 @@ namespace CBFCirc
         double sensingRadius = 5.0; //3.0
 
         double gainRobotYaw = 4.0; // 2.0 4.0
-        double gainTargetController = 0.2;
+        double gainTargetController = 0.4; //0.2
         double alphaCBFPositive = 1.0;
-        double alphaCBFNegative = 10; //7.5
-        double distanceMinBeta = 0.4; // 0.5 0.3
+        double alphaCBFNegative = 6; //7.5
+        double distanceMinBeta = 0.35; // 0.5 0.3 0.4
         double maxVelCircBeta = 1.25; // 0.5 0.5
         double maxTotalVel = 0.3;
-        double distanceMargin = 0.15;
+        double distanceMargin = 0.25; //0.20
 
         double deltaTimePlanner = 0.2; // 0.1
-        double maxTimePlanner = 100;   // 50
-        double plannerReachError = 0.25;
+        double maxTimePlanner = 120;   // 50 100
+        double plannerReachError = 0.50; //0.25
         double acceptableRationPlanning = 2.0;
 
         int freqStoreDebug = 15;
-        int freqReplanPath = 500;
+        int freqReplanPath = 250; //500
         int freqUpdateGraph = 500;
-        int freqUpdateKDTree = 100;
+        int freqUpdateKDTree = 50; //100
         int freqDisplayMessage = 50;
 
         double noMaxIterationsCorrectPoint = 20;
@@ -50,13 +50,13 @@ namespace CBFCirc
         double radiusCreateNode = 1.5; // 0.8
         double maxTimePlanConnectNode = 50;
 
-        double minDistFilterKDTree = 0.3;
+        double minDistFilterKDTree = 0.15; //0.3
 
         int sampleStorePath = 15;
 
         double maxTimeSampleExploration = 80;
         int noTriesClosestPoint = 5; 
-        VectorXd globalTargetPosition = vec3d(9,1,0.8);
+        VectorXd globalTargetPosition = vec3d(7,0,-0.1725); //vec3d(10,1,-0.1725)
     };
 
     struct DistanceResult
@@ -121,6 +121,7 @@ namespace CBFCirc
         goingToGlobalGoal,
         pathToExploration,
         goingToExplore,
+        planning,
         sucess,
         failure
     };

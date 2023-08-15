@@ -26,6 +26,7 @@
 #include <octomap_with_query/frontier_points.h>
 
 #include "std_msgs/String.h"
+#include "std_msgs/Int16.h"
 
 #include "utils.h"
 #include "utils.cpp"
@@ -116,7 +117,8 @@ void updatePose(const ros::TimerEvent &e)
 
         double px = Global::transform->getOrigin().x();
         double py = Global::transform->getOrigin().y();
-        double pz = Global::transform->getOrigin().z();
+        // double pz = Global::transform->getOrigin().z();
+        double pz = Global::param.constantHeight;
 
         double x = Global::transform->getRotation().x();
         double y = Global::transform->getRotation().y();
@@ -165,14 +167,13 @@ void updatePose(const ros::TimerEvent &e)
 
 // vector<VectorXd> allThePoints = {};
 
-
-vector<vector<VectorXd>> getFrontierPoints(VectorXd position)
+vector<vector<VectorXd>> getFrontierPoints()
 {
     vector<vector<VectorXd>> frontierPoints;
     octomap_with_query::frontier_points srv;
 
-    srv.request.z_min = Global::param.constantHeight-0.3;
-    srv.request.z_max = Global::param.constantHeight+0.3;
+    srv.request.z_min = Global::param.constantHeight - 0.2;
+    srv.request.z_max = Global::param.constantHeight + 0.2;
 
     if (Global::frontierClient->call(srv))
     {
@@ -199,7 +200,6 @@ vector<vector<VectorXd>> getFrontierPoints(VectorXd position)
     }
     return frontierPoints;
 }
-
 
 vector<VectorXd> getLidarPointsSource(VectorXd position, double radius)
 {
@@ -278,136 +278,220 @@ void lowLevelMovement()
             CBFCircControllerResult cccr = CBFCircController(getRobotPose(), Global::currentGoalPosition,
                                                              obsPoints, Global::currentOmega, Global::param);
 
+            if (!Global::safetyMode && cccr.distanceResult.distance < 0)
+            {
+                debug_addMessage(Global::generalCounter, "Safety mode started!");
+                Global::safetyMode = true;
+            }
+
+            if (Global::safetyMode && cccr.distanceResult.distance > 0.25)
+            {
+                debug_addMessage(Global::generalCounter, "Safety mode ended!");
+                Global::safetyMode = false;
+            }
+
+            if (!Global::safetyMode)
+            {
+                // Send the twist
+                setTwist(cccr.linearVelocity, cccr.angularVelocity);
+            }
+            else
+            {
+                VectorXd linearVelocity = VectorXd::Zero(3);
+                VectorXd gradSafetyPosition = Global::param.maxTotalVel * cccr.distanceResult.gradSafetyPosition.normalized();
+                linearVelocity << gradSafetyPosition[0], gradSafetyPosition[1], 0;
+                setTwist(linearVelocity, 0);
+            }
+
             // Refresh some variables
             Global::distance = cccr.distanceResult.distance;
             Global::safety = cccr.distanceResult.safety;
             Global::gradSafetyPosition = cccr.distanceResult.gradSafetyPosition;
             Global::gradSafetyOrientation = cccr.distanceResult.gradSafetyOrientation;
             Global::witnessDistance = cccr.distanceResult.witnessDistance;
-            // Global::bconstraint = cccr.bconstraint;
-
-            // Send the twist
-            setTwist(cccr.linearVelocity, cccr.angularVelocity);
         }
     }
+}
+
+void replanOmegaCall()
+{
+    Global::mutexReplanOmega.lock();
+
+    Global::generateManyPathResult = CBFCircPlanMany(getRobotPose(), Global::currentGoalPosition, getLidarPointsKDTree,
+                                                     Global::param.maxTimePlanner, Global::param.plannerReachError, Global::param);
+
+    Global::firstPlanCreated = true;
+
+    // DEBUG
+    int counter = Global::generalCounter;
+    debug_addMessage(counter, "Store event: replanning omega");
+    debug_generateManyPathsReport(counter);
+    debug_Store(counter);
+    // DEBUG
+
+    if (Global::generateManyPathResult.atLeastOnePathReached)
+    {
+        Global::currentOmega = Global::generateManyPathResult.bestOmega;
+    }
+    else
+    {
+        // Transition condition
+        debug_addMessage(counter, "Failed to find path... plan to explore frontier!");
+
+        Global::planningState = MotionPlanningState::planning;
+        Global::currentGoalPosition = getRobotPose().position;
+        Global::currentOmega = Matrix3d::Zero(3, 3);
+        vector<vector<VectorXd>> frontierPoints = getFrontierPoints();
+        while (frontierPoints.size() == 0)
+        {
+            ROS_INFO_STREAM("No frontier points found... trying again...");
+            std::this_thread::sleep_for(std::chrono::seconds(5));
+            frontierPoints = getFrontierPoints();
+        }
+
+        updateGraphCall();
+        Global::mutexUpdateGraph.lock();
+        NewExplorationPointResult nepr = Global::graph.getNewExplorationPoint(getRobotPose(), getLidarPointsKDTree,
+                                                                              frontierPoints, Global::param);
+        Global::mutexUpdateGraph.unlock();
+
+        if (nepr.success)
+        {
+            // Algorithm succesful
+            debug_addMessage(counter, "Frontier point selection successful... replanning path");
+
+            Global::currentPath = nepr.pathToExplorationPoint;
+            Global::currentIndexPath = 0;
+            Global::explorationPosition = nepr.bestExplorationPosition;
+            Global::currentGoalPosition = Global::currentPath[0]->nodeOut->position;
+            Global::planningState = MotionPlanningState::pathToExploration;
+
+            // DEBUG
+            debug_addMessage(counter, "Store event: beginning to travel path");
+            debug_generateManyPathsReport(counter);
+            debug_Store(counter);
+            // DEBUG
+
+            Global::mutexReplanOmega.unlock();
+            replanOmegaCall();
+            Global::mutexReplanOmega.lock();
+        }
+        else
+        {
+            // Algorithm failed
+            ROS_INFO_STREAM("Algorithm for finding new exploration points failed! Algorithm halted!");
+            Global::planningState = MotionPlanningState::failure;
+            Global::continueAlgorithm = false;
+        }
+    }
+    Global::mutexReplanOmega.unlock();
 }
 
 void replanOmega()
 {
     while (ros::ok() && Global::continueAlgorithm)
+        if (Global::measured && (Global::generalCounter % Global::param.freqReplanPath == 0))
+            replanOmegaCall();
+}
+
+void updateGraphCall()
+{
+
+    Global::mutexUpdateGraph.lock();
+    VectorXd currentPoint = getRobotPose().position;
+    VectorXd correctedPoint = correctPoint(currentPoint, getLidarPointsKDTree(getRobotPose().position, Global::param.sensingRadius), Global::param);
+
+    if (Global::graph.getNeighborNodes(correctedPoint, Global::param.radiusCreateNode).size() == 0)
     {
+        vector<double> distances;
+        vector<int> indexes;
+        vector<Matrix3d> omegas;
 
-        if (Global::measured && (Global::generalCounter % Global::param.freqReplanPath == 0) && !Global::replanOmegaWorking)
+        for (int i = 0; i < Global::graph.nodes.size(); i++)
         {
-            Global::replanOmegaWorking = true;
+            RobotPose pose;
+            pose.position = Global::graph.nodes[i]->position;
+            pose.orientation = 0;
 
-            Global::generateManyPathResult = CBFCircPlanMany(getRobotPose(), Global::currentGoalPosition, getLidarPointsKDTree,
-                                                             Global::param.maxTimePlanner, Global::param.plannerReachError, Global::param);
+            GenerateManyPathsResult gmpr = CBFCircPlanMany(pose, correctedPoint, getLidarPointsKDTree,
+                                                           Global::param.maxTimePlanConnectNode, Global::param.plannerReachError, Global::param);
+            if (gmpr.atLeastOnePathReached)
+            {
+                indexes.push_back(i);
+                omegas.push_back(gmpr.bestOmega);
+                distances.push_back(gmpr.bestPathSize);
+            }
+        }
 
-            // DEBUG
-            debug_generateManyPathsReport();
-            // DEBUG
-
-            Global::currentOmega = Global::generateManyPathResult.bestOmega;
-            Global::firstPlanCreated = true;
-
-            Global::replanOmegaWorking = false;
+        if (distances.size() > 0)
+        {
+            vector<int> ind = sortGiveIndex(distances);
+            Node *newNode = Global::graph.addNode(correctedPoint);
+            Global::graph.connect(Global::graph.nodes[indexes[ind[0]]], newNode, distances[ind[0]], omegas[ind[0]]);
         }
     }
+
+    Global::mutexUpdateGraph.unlock();
 }
 
 void updateGraph()
 {
     while (ros::ok() && Global::continueAlgorithm)
+        if (Global::measured && (Global::generalCounter % Global::param.freqUpdateGraph == 0))
+            updateGraphCall();
+}
+
+void updateKDTreeCall()
+{
+
+    Global::mutexUpdateKDTree.lock();
+
+    vector<VectorXd> pointsFromLidar = getLidarPointsSource(getRobotPose().position, Global::param.sensingRadius);
+
+    int debug_pointsAdded = 0;
+
+    for (int i = 0; i < pointsFromLidar.size(); i++)
     {
-        if (Global::measured && (Global::generalCounter % Global::param.freqUpdateGraph == 0) && !Global::updateGraphWorking)
+        double minDist = VERYBIGNUMBER;
+        for (int j = 0; j < Global::pointsKDTree.size(); j++)
+            minDist = min(minDist, (Global::pointsKDTree[j] - pointsFromLidar[i]).squaredNorm());
+
+        if (minDist > pow(Global::param.minDistFilterKDTree, 2))
         {
-            Global::updateGraphWorking = true;
-
-            VectorXd currentPoint = getRobotPose().position;
-            VectorXd correctedPoint = correctPoint(currentPoint, getLidarPointsKDTree(getRobotPose().position, Global::param.sensingRadius), Global::param);
-
-            if (Global::graph.getNeighborNodes(correctedPoint, Global::param.radiusCreateNode).size() == 0)
-            {
-                vector<double> distances;
-                vector<int> indexes;
-                vector<Matrix3d> omegas;
-
-                for (int i = 0; i < Global::graph.nodes.size(); i++)
-                {
-                    RobotPose pose;
-                    pose.position = Global::graph.nodes[i]->position;
-                    pose.orientation = 0;
-
-                    GenerateManyPathsResult gmpr = CBFCircPlanMany(pose, correctedPoint, getLidarPointsKDTree,
-                                                                   Global::param.maxTimePlanConnectNode, Global::param.plannerReachError, Global::param);
-                    if (gmpr.atLeastOnePathReached)
-                    {
-                        indexes.push_back(i);
-                        omegas.push_back(gmpr.bestOmega);
-                        distances.push_back(gmpr.bestPathSize);
-                    }
-                }
-
-                if (distances.size() > 0)
-                {
-                    vector<int> ind = sortGiveIndex(distances);
-                    Node *newNode = Global::graph.addNode(correctedPoint);
-                    Global::graph.connect(Global::graph.nodes[indexes[ind[0]]], newNode, distances[ind[0]], omegas[ind[0]]);
-                }
-            }
-
-            Global::updateGraphWorking = false;
+            Global::pointsKDTree.push_back(pointsFromLidar[i]);
+            debug_pointsAdded++;
         }
     }
+
+    Kdtree::KdNodeVector nodes;
+
+    // Guarantee that it has at least one node
+    vector<double> point(3);
+    point[0] = VERYBIGNUMBER;
+    point[1] = VERYBIGNUMBER;
+    point[2] = VERYBIGNUMBER;
+    nodes.push_back(Kdtree::KdNode(point));
+
+    for (int i = 0; i < Global::pointsKDTree.size(); i++)
+    {
+        vector<double> point(3);
+        point[0] = Global::pointsKDTree[i][0];
+        point[1] = Global::pointsKDTree[i][1];
+        point[2] = Global::pointsKDTree[i][2];
+        nodes.push_back(Kdtree::KdNode(point));
+    }
+
+    Global::kdTree = new Kdtree::KdTree(&nodes, 2);
+
+    Global::mutexUpdateKDTree.unlock();
+    debug_addMessage(Global::generalCounter, "Updated KD Tree with " + std::to_string(debug_pointsAdded) + " points");
 }
 
 void updateKDTree()
 {
     while (ros::ok() && Global::continueAlgorithm)
-    {
-        if (Global::measured && (Global::generalCounter % Global::param.freqUpdateKDTree == 0) && !Global::updateKDTreeWorking)
-        {
-
-            Global::mutexUpdateKDTree.lock();
-            Global::updateKDTreeWorking = true;
-
-            vector<VectorXd> pointsFromLidar = getLidarPointsSource(getRobotPose().position, Global::param.sensingRadius);
-
-            for (int i = 0; i < pointsFromLidar.size(); i++)
-            {
-                double minDist = VERYBIGNUMBER;
-                for (int j = 0; j < Global::pointsKDTree.size(); j++)
-                    minDist = min(minDist, (Global::pointsKDTree[j] - pointsFromLidar[i]).squaredNorm());
-
-                if (minDist > pow(Global::param.minDistFilterKDTree, 2))
-                    Global::pointsKDTree.push_back(pointsFromLidar[i]);
-            }
-
-            Kdtree::KdNodeVector nodes;
-
-            // Guarantee that it has at least one node
-            vector<double> point(3);
-            point[0] = VERYBIGNUMBER;
-            point[1] = VERYBIGNUMBER;
-            point[2] = VERYBIGNUMBER;
-            nodes.push_back(Kdtree::KdNode(point));
-
-            for (int i = 0; i < Global::pointsKDTree.size(); i++)
-            {
-                vector<double> point(3);
-                point[0] = Global::pointsKDTree[i][0];
-                point[1] = Global::pointsKDTree[i][1];
-                point[2] = Global::pointsKDTree[i][2];
-                nodes.push_back(Kdtree::KdNode(point));
-            }
-
-            Global::kdTree = new Kdtree::KdTree(&nodes, 2);
-
-            Global::updateKDTreeWorking = false;
-            Global::mutexUpdateKDTree.unlock();
-        }
-    }
+        if (Global::measured && (Global::generalCounter % Global::param.freqUpdateKDTree == 0))
+            updateKDTreeCall();
 }
 
 void transitionAlg()
@@ -416,7 +500,6 @@ void transitionAlg()
     {
         if (Global::measured)
         {
-            Global::transitionAlgWorking = true;
             bool pointReached = (getRobotPose().position - Global::currentGoalPosition).norm() <= Global::param.plannerReachError;
 
             if ((Global::planningState == MotionPlanningState::goingToGlobalGoal) && pointReached)
@@ -425,45 +508,45 @@ void transitionAlg()
                 Global::continueAlgorithm = false;
 
                 // DEBUG
-                debug_addMessage("Success!");
+                debug_addMessage(Global::generalCounter, "Success!");
                 // DEBUG
             }
 
-            if ((Global::planningState == MotionPlanningState::goingToExplore) && pointReached && (!Global::updateKDTreeWorking) && (!Global::replanOmegaWorking))
+            if ((Global::planningState == MotionPlanningState::goingToExplore) && pointReached)
             {
                 Global::planningState = MotionPlanningState::goingToGlobalGoal;
                 Global::currentGoalPosition = Global::param.globalTargetPosition;
 
-                Global::updateKDTreeWorking = true;
-                updateKDTree();
-                Global::updateKDTreeWorking = false;
-                Global::replanOmegaWorking = true;
-                replanOmega();
-                Global::replanOmegaWorking = false;
+                Global::currentPath = {};
+                Global::currentIndexPath = -1;
+                Global::explorationPosition = VectorXd::Zero(3);
+
+                updateKDTreeCall();
+                replanOmegaCall();
+
+                // DEBUG
+                debug_addMessage(Global::generalCounter, "Reached exploration point. Going to global target!");
+                // DEBUG
             }
 
-            if ((Global::planningState == MotionPlanningState::pathToExploration) && pointReached && (!Global::updateKDTreeWorking) && (!Global::replanOmegaWorking))
+            if ((Global::planningState == MotionPlanningState::pathToExploration) && pointReached)
             {
                 if (Global::currentIndexPath == Global::currentPath.size() - 1)
                 {
                     Global::planningState = MotionPlanningState::goingToExplore;
                     Global::currentGoalPosition = Global::explorationPosition;
 
-                    Global::updateKDTreeWorking = true;
-                    updateKDTree();
-                    Global::updateKDTreeWorking = false;
-                    Global::replanOmegaWorking = true;
-                    replanOmega();
-                    Global::replanOmegaWorking = false;
+                    updateKDTreeCall();
+                    replanOmegaCall();
 
                     // DEBUG
-                    debug_addMessage("Reached last point on the path. Going to explore a frontier...");
+                    debug_addMessage(Global::generalCounter, "Reached last point on the path. Going to explore a frontier...");
                     // DEBUG
                 }
                 else
                 {
                     // DEBUG
-                    debug_addMessage("Reached point " + std::to_string(Global::currentIndexPath));
+                    debug_addMessage(Global::generalCounter, "Reached point " + std::to_string(Global::currentIndexPath));
                     // DEBUG
 
                     Global::currentIndexPath++;
@@ -471,10 +554,15 @@ void transitionAlg()
                     Global::currentOmega = Global::currentPath[Global::currentIndexPath]->omega;
                 }
             }
-
-            Global::transitionAlgWorking = false;
         }
     }
+}
+
+void endCallback(const std_msgs::Int16::ConstPtr &msg)
+{
+    int16_t ind = msg.get()->data;
+    if (ind == 1)
+        Global::continueAlgorithm = false;
 }
 
 int main(int argc, char **argv)
@@ -492,6 +580,9 @@ int main(int argc, char **argv)
     ros::Rate rate(100);
     ros::Timer updatePoseTimer;
     updatePoseTimer = nodeHandler.createTimer(ros::Duration(0.01), updatePose);
+
+    ros::Subscriber subEnd = nodeHandler.subscribe("endProgram", 1000, endCallback);
+    ros::Publisher pubEnd = nodeHandler.advertise<std_msgs::Int16>("endProgram", 1000);
 
     // Initialize some global variables
     Global::pubBodyTwist = &aux_pubBodyTwist;
@@ -548,8 +639,6 @@ int main(int argc, char **argv)
         if (Global::measured)
         {
 
-            Global::generalCounter++;
-
             if (Global::generalCounter % Global::param.freqDisplayMessage == 0)
             {
                 if (Global::planningState == MotionPlanningState::goingToGlobalGoal)
@@ -559,11 +648,15 @@ int main(int argc, char **argv)
                 if (Global::planningState == MotionPlanningState::pathToExploration)
                 {
                     ROS_INFO_STREAM("-------PATH TO EXPLORATION-------");
-                    ROS_INFO_STREAM("Point " << Global::currentIndexPath << " of " << (Global::currentPath.size() + 1));
+                    ROS_INFO_STREAM("Point " << (Global::currentIndexPath + 1) << " of " << (Global::currentPath.size()));
                 }
                 if (Global::planningState == MotionPlanningState::goingToExplore)
                 {
                     ROS_INFO_STREAM("---------GOING TO EXPLORE--------");
+                }
+                if (Global::planningState == MotionPlanningState::planning)
+                {
+                    ROS_INFO_STREAM("---------PLANNING--------");
                 }
                 // ROS_INFO_STREAM("counter = " << Global::generalCounter);
                 // ROS_INFO_STREAM("linvelocity = " << printVector(Global::desLinVelocity));
@@ -575,22 +668,30 @@ int main(int argc, char **argv)
             }
 
             // DEBUG
-            debug_addMessage("Periodic storage");
-            debug_Store();
+            if (Global::firstPlanCreated && (Global::generalCounter % Global::param.freqStoreDebug == 0))
+                debug_Store(Global::generalCounter);
+
             // DEBUG
+
+            Global::generalCounter++;
         }
 
         rate.sleep();
     }
 
-    lowLevelMovementThread.join();
-    replanOmegaThread.join();
-    updateGraphThread.join();
-    updateKDTreeThread.join();
-    transitionAlgThread.join();
-
     ofstream file;
     debug_printAlgStateToMatlab(&file);
+
+    lowLevelMovementThread.join();
+    cout << "lowLevelMovementThread joined" << std::endl;
+    replanOmegaThread.join();
+    cout << "replanOmegaThread joined" << std::endl;
+    updateGraphThread.join();
+    cout << "updateGraphThread joined" << std::endl;
+    updateKDTreeThread.join();
+    cout << "updateKDTreeThread joined" << std::endl;
+    transitionAlgThread.join();
+    cout << "transitionAlgThread joined" << std::endl;
 
     return 0;
 }
