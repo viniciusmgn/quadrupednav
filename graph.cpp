@@ -172,6 +172,7 @@ namespace CBFCirc
         {
             for (int i = 0; i < frontier.size(); i++)
             {
+                ROS_INFO_STREAM("Computing for frontier point: "<<i);
                 double bestDist = -VERYBIGNUMBER;
                 double tempDist;
                 VectorXd bestPoint = VectorXd::Zero(3);

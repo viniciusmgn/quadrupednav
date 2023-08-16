@@ -17,32 +17,33 @@ namespace CBFCirc
 
     struct Parameters
     {
-        double boundingRadius = 0.30; //0.3
+        double boundingRadius = 0.30; // 0.3
         double boundingHeight = 1.4;
         double smoothingParam = 0.5; // 0.1 0.3
 
-        double constantHeight = -0.1725; //0.8
-        double marginSafety = 0.4; // 0.8
-        double sensingRadius = 5.0; //3.0
+        double constantHeight = -0.1725; // 0.8
+        double marginSafety = 0.4;       // 0.8
+        double sensingRadius = 5.0;      // 3.0
 
-        double gainRobotYaw = 4.0; // 2.0 4.0
-        double gainTargetController = 0.4; //0.2
+        double gainRobotYaw = 4.0;         // 2.0 4.0
+        double gainTargetController = 0.4; // 0.2
         double alphaCBFPositive = 1.0;
-        double alphaCBFNegative = 6; //7.5
-        double distanceMinBeta = 0.35; // 0.5 0.3 0.4
-        double maxVelCircBeta = 1.25; // 0.5 0.5
+        double alphaCBFNegative = 6;   // 7.5
+        double distanceMinBeta = 0.50; // 0.5 0.3 0.4
+        double maxVelCircBeta = 1.25;  // 0.5 0.5
         double maxTotalVel = 0.3;
-        double distanceMargin = 0.25; //0.20
+        double distanceMargin = 0.15; // 0.20
 
-        double deltaTimePlanner = 0.2; // 0.1
-        double maxTimePlanner = 120;   // 50 100
-        double plannerReachError = 0.50; //0.25
+        double deltaTimePlanner = 0.2;   // 0.1
+        double maxTimePlanner = 120;     // 50 100
+        double plannerReachError = 0.50; // 0.25
+        double plannerOmegaPlanReachError = 0.30; // 0.25
         double acceptableRationPlanning = 2.0;
 
         int freqStoreDebug = 15;
-        int freqReplanPath = 250; //500
+        int freqReplanPath = 250; // 500
         int freqUpdateGraph = 500;
-        int freqUpdateKDTree = 50; //100
+        int freqUpdateKDTree = 50; // 100
         int freqDisplayMessage = 50;
 
         double noMaxIterationsCorrectPoint = 20;
@@ -50,13 +51,13 @@ namespace CBFCirc
         double radiusCreateNode = 1.5; // 0.8
         double maxTimePlanConnectNode = 50;
 
-        double minDistFilterKDTree = 0.15; //0.3
+        double minDistFilterKDTree = 0.15; // 0.3
 
         int sampleStorePath = 15;
 
         double maxTimeSampleExploration = 80;
-        int noTriesClosestPoint = 5; 
-        VectorXd globalTargetPosition = vec3d(7,0,-0.1725); //vec3d(10,1,-0.1725)
+        int noTriesClosestPoint = 5;
+        VectorXd globalTargetPosition = vec3d(7, 0, -0.1725); // vec3d(10,1,-0.1725)
     };
 
     struct DistanceResult
@@ -85,7 +86,14 @@ namespace CBFCirc
         double angularVelocity;
         DistanceResult distanceResult;
         bool feasible;
-        //VectorXd bconstraint;
+    };
+
+    struct CBFControllerResult
+    {
+        VectorXd linearVelocity;
+        double angularVelocity;
+        DistanceResult distanceResult;
+        bool feasible;
     };
 
     enum class PathState
@@ -114,6 +122,15 @@ namespace CBFCirc
         bool atLeastOnePathReached;
         double bestPathSize;
         Matrix3d bestOmega;
+        GeneratePathResult bestPath;
+    };
+
+    struct VectorFieldResult
+    {
+        VectorXd linearVelocity;
+        double angularVelocity;
+        double distance;
+        int index;
     };
 
     enum class MotionPlanningState
@@ -138,5 +155,13 @@ namespace CBFCirc
                                             double maxTime, double reachpointError, Parameters param);
     RadialDistanceResult computeDistRadial(vector<VectorXd> points, VectorXd position, double smoothingParam);
     VectorXd correctPoint(VectorXd point, vector<VectorXd> neighborPoints, Parameters param);
+    bool pathFree(vector<RobotPose> path, MapQuerier querier, int initialIndex, int finalIndex, Parameters param);
+    vector<RobotPose> generateSimplePath(vector<RobotPose> originalPath, MapQuerier querier, int initialIndex, int finalIndex, Parameters param);
+    vector<RobotPose> correctPath(vector<RobotPose> originalPath, MapQuerier querier, Parameters param);
+    vector<RobotPose> optimizePath(vector<RobotPose> originalPath, MapQuerier querier, Parameters param);
+    vector<RobotPose> upsample(vector<RobotPose> path, double minDistPos, double minDistOri);
+    VectorFieldResult vectorField(RobotPose pose, vector<RobotPose> path, Parameters param);
+    CBFControllerResult CBFController(RobotPose pose, VectorXd targetLinearVelocity, double targetAngularVelocity,
+                                      vector<VectorXd> neighborPoints, Parameters param);
 
 }

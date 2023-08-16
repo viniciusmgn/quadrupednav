@@ -81,11 +81,7 @@ namespace CBFCirc
     {
         DistanceResult dr = computeDist(neighborPoints, pose, param);
 
-        double mult = max(1 - dr.distance / 0.1, 0.0);
-        VectorXd vtg1 = 0.5 * dr.gradSafetyPosition;
-        VectorXd vtg2 = -param.gainTargetController * (pose.position - targetPosition);
-        //VectorXd vd3d = mult * vtg1 + (1-mult) * vtg2;
-        VectorXd vd3d = vtg2;
+        VectorXd vd3d = -param.gainTargetController * (pose.position - targetPosition);
         VectorXd vd = VectorXd::Zero(2);
         vd << vd3d[0], vd3d[1];
 
@@ -101,7 +97,7 @@ namespace CBFCirc
 
         VectorXd ud = vectorVertStack(vd, 0);
 
-        MatrixXd H = 2 * (H1 + H2);
+        MatrixXd H = 2 * (H1 + 4 * H2);
         VectorXd f = -2 * ud;
         MatrixXd A = MatrixXd::Zero(1, 3);
         A << dr.gradSafetyPosition[0], dr.gradSafetyPosition[1], dr.gradSafetyOrientation;
@@ -236,6 +232,7 @@ namespace CBFCirc
 
         gmpr.bestPathSize = gmpr.pathLenghts[ind[0]];
         gmpr.bestOmega = gmpr.pathOmega[ind[0]];
+        gmpr.bestPath = gmpr.pathResults[ind[0]];
 
         return gmpr;
     }
@@ -278,5 +275,243 @@ namespace CBFCirc
         } while (newDist > currentDist && (k < param.noMaxIterationsCorrectPoint));
 
         return pointCorrected;
+    }
+
+    bool pathFree(vector<RobotPose> path, MapQuerier querier, int initialIndex, int finalIndex, Parameters param)
+    {
+        if (finalIndex - initialIndex < 5)
+            return true;
+        else
+        {
+            int midIndex = (int)(finalIndex + initialIndex) / 2;
+            if (computeDist(querier(path[midIndex].position, param.sensingRadius), path[midIndex], param).distance < 0.05)
+                return false;
+            else
+                return pathFree(path, querier, initialIndex, midIndex, param) && pathFree(path, querier, midIndex, finalIndex, param);
+        }
+    }
+
+    vector<RobotPose> generateSimplePath(vector<RobotPose> originalPath, MapQuerier querier, int initialIndex, int finalIndex, Parameters param)
+    {
+        RobotPose startingPose = originalPath[initialIndex];
+        RobotPose endingPose = originalPath[finalIndex];
+        vector<RobotPose> simplePath = {};
+
+        int N = 100;
+        for (int i = 0; i < N; i++)
+        {
+            RobotPose intPose;
+            double fat = ((double)i) / ((double)(N - 1));
+            intPose.position = startingPose.position + (endingPose.position - startingPose.position) * fat;
+            intPose.orientation = startingPose.orientation + (endingPose.orientation - startingPose.orientation) * fat;
+            simplePath.push_back(intPose);
+        }
+
+        if (pathFree(simplePath, querier, 0, simplePath.size() - 1, param))
+            return simplePath;
+        else
+            return {};
+    }
+
+    vector<RobotPose> correctPath(vector<RobotPose> originalPath, MapQuerier querier, Parameters param)
+    {
+        vector<double> pathLength = {0};
+        vector<RobotPose> modifiedPath = {originalPath[0]};
+
+        for (int i = 0; i < originalPath.size() - 1; i++)
+        {
+            double delta = (originalPath[i + 1].position - originalPath[i].position).norm() + abs(originalPath[i + 1].orientation - originalPath[i].orientation);
+            pathLength.push_back(pathLength[i] + delta);
+            modifiedPath.push_back(originalPath[i + 1]);
+        }
+        for (int i = 0; i < pathLength.size(); i++)
+            pathLength[i] = pathLength[i] / pathLength[pathLength.size() - 1];
+
+        for (int i = 0; i < originalPath.size(); i++)
+        {
+            double fat = 16 * pow(pathLength[i] * (1 - pathLength[i]), 2);
+            
+            //fat = 4 * pathLength[i] * (1 - pathLength[i]);
+
+            for (int j = 0; j < 5; j++)
+            {
+                DistanceResult dr = computeDist(querier(modifiedPath[i].position, param.sensingRadius), modifiedPath[i], param);
+
+                fat = sqrt(1.0 + VERYSMALLNUMBER - pathLength[i])*max(0.0,1.0-dr.distance/0.60);
+
+                double norm = sqrt(dr.gradSafetyPosition.squaredNorm() + pow(dr.gradSafetyOrientation, 2)) + VERYSMALLNUMBER;
+                modifiedPath[i].position += fat * 0.15 * dr.gradSafetyPosition / norm;
+                modifiedPath[i].orientation += fat * 0.15 * dr.gradSafetyOrientation / norm;
+            }
+        }
+
+        return modifiedPath;
+    }
+
+    vector<RobotPose> optimizePath(vector<RobotPose> originalPath, MapQuerier querier, Parameters param)
+    {
+
+        vector<RobotPose> path = {};
+        int indexPath = -1;
+        int currentIndex = originalPath.size() - 1;
+        int N = 0;
+
+        while (indexPath != originalPath.size() - 1 && N < 5)
+        {
+            vector<RobotPose> tryPath = generateSimplePath(originalPath, querier, 0, currentIndex, param);
+            if (tryPath.size() > 0)
+            {
+                path = tryPath;
+                indexPath = currentIndex;
+                currentIndex = (originalPath.size() - 1 + currentIndex) / 2;
+            }
+            else
+                currentIndex = currentIndex / 2;
+
+            N++;
+        }
+
+        vector<RobotPose> optimizedPath = {};
+
+        for (int i = 0; i < path.size(); i++)
+            optimizedPath.push_back(path[i]);
+
+        for (int i = indexPath + 1; i < originalPath.size(); i++)
+            optimizedPath.push_back(originalPath[i]);
+
+        return upsample(correctPath(optimizedPath, querier, param), 0.01, 0.01);
+    }
+
+    vector<RobotPose> upsample(vector<RobotPose> path, double minDistPos, double minDistOri)
+    {
+        vector<RobotPose> upsampledPath = {};
+
+        for (int i = 0; i < path.size() - 1; i++)
+        {
+            VectorXd deltaPos = path[i + 1].position - path[i].position;
+            double deltaOri = path[i + 1].orientation - path[i].orientation;
+            int N = (int)max(deltaPos.norm() / minDistPos, abs(deltaOri) / minDistOri);
+
+            RobotPose newPose = path[i];
+            for (int j = 0; j <= N; j++)
+            {
+                upsampledPath.push_back(newPose);
+                newPose.position += deltaPos / ((double)N);
+                newPose.orientation += deltaOri / ((double)N);
+            }
+        }
+
+        upsampledPath.push_back(path[path.size() - 1]);
+
+        // ROS_INFO_STREAM("samplingRatio " << (upsampledPath.size()/path.size()));
+
+        return upsampledPath;
+    }
+
+    VectorFieldResult vectorField(RobotPose pose, vector<RobotPose> path, Parameters param)
+    {
+
+        // Find the closest point in the curve
+        double dmin = VERYBIGNUMBER;
+        double dminTemp;
+        int ind = 0;
+
+        for (int i = 0; i < path.size(); i++)
+        {
+            dminTemp = sqrt((path[i].position - pose.position).squaredNorm() + (1.0 - cos(path[i].orientation - pose.orientation)));
+            //dminTemp = sqrt((path[i].position - pose.position).squaredNorm());
+            if (dminTemp < dmin)
+            {
+                dmin = dminTemp;
+                ind = i;
+            }
+        }
+
+        VectorFieldResult vfr;
+        vfr.distance = dmin;
+        vfr.index = ind;
+
+        VectorXd pi = path[ind].position;
+        double thetai = path[ind].orientation;
+        VectorXd gradD = vec3d(pi[0] - pose.position[0], pi[1] - pose.position[1], sin(thetai - pose.orientation));
+
+        // Compute the normal vector
+        VectorXd N = gradD / (gradD.norm() + VERYSMALLNUMBER);
+
+        // Compute the tangent vector
+        VectorXd T = VectorXd::Zero(3);
+
+        if (ind == 0)
+        {
+            double dcos = cos(path[1].orientation) - cos(path[0].orientation);
+            double dsin = sin(path[1].orientation) - sin(path[0].orientation);
+            double dtheta = -sin(path[0].orientation) * dcos + cos(path[0].orientation) * dsin;
+            T = vec3d(path[1].position[0] - path[0].position[0], path[1].position[1] - path[0].position[1], dtheta);
+        }
+        else
+        {
+            double dcos = cos(path[ind].orientation) - cos(path[ind-1].orientation);
+            double dsin = sin(path[ind].orientation) - sin(path[ind-1].orientation);
+            double dtheta = -sin(path[ind].orientation) * dcos + cos(path[ind].orientation) * dsin;
+            T = vec3d(path[ind].position[0] - path[ind - 1].position[0], path[ind].position[1] - path[ind - 1].position[1], dtheta);
+        }
+
+        T = T / (T.norm() + VERYSMALLNUMBER);
+
+        // Compute the G and H gains
+        double G = (2 / M_PI) * atan(2.0 * sqrt(dmin));
+        double H = sqrt(1 - (1 - VERYSMALLNUMBER) * G * G);
+
+        // Compute the final vector field:
+        VectorXd v = param.maxTotalVel * (0.5 * G * N + H * T);
+
+        vfr.linearVelocity = vec3d(v[0], v[1], 0);
+        vfr.angularVelocity = v[2];
+
+        return vfr;
+    }
+    CBFControllerResult CBFController(RobotPose pose, VectorXd targetLinearVelocity, double targetAngularVelocity,
+                                      vector<VectorXd> neighborPoints, Parameters param)
+    {
+        DistanceResult dr = computeDist(neighborPoints, pose, param);
+        VectorXd ud = Vector3d::Zero(3);
+        ud << targetLinearVelocity[0], targetLinearVelocity[1], targetAngularVelocity;
+
+        MatrixXd H = 2 * Matrix3d::Identity(3, 3);
+        VectorXd f = -2 * ud;
+        MatrixXd A = MatrixXd::Zero(1, 3);
+        A << dr.gradSafetyPosition[0], dr.gradSafetyPosition[1], dr.gradSafetyOrientation;
+        VectorXd b = VectorXd::Zero(1);
+
+        double cbfConst;
+        if (dr.distance - param.distanceMargin > 0)
+            cbfConst = -param.alphaCBFPositive * (dr.distance - param.distanceMargin);
+        else
+            cbfConst = -param.alphaCBFNegative * (dr.distance - param.distanceMargin);
+
+        b << cbfConst;
+
+        VectorXd u = solveQP(H, f, A, b);
+
+        CBFControllerResult ccr;
+        ccr.distanceResult = dr;
+        ccr.linearVelocity = VectorXd::Zero(3);
+
+        if (u.rows() > 0)
+        {
+            if (u.norm() >= param.maxTotalVel)
+                u = param.maxTotalVel * u / (u.norm());
+
+            ccr.linearVelocity << u[0], u[1], 0;
+            ccr.angularVelocity = u[2];
+            ccr.feasible = true;
+        }
+        else
+        {
+            ccr.angularVelocity = 0;
+            ccr.feasible = false;
+        }
+
+        return ccr;
     }
 }

@@ -22,6 +22,7 @@
 #include <nav_msgs/Odometry.h>
 #include <boost/filesystem.hpp>
 #include <mutex>
+#include <shared_mutex>
 #include "std_msgs/String.h"
 #include "./kdtree-cpp-master/kdtree.hpp"
 
@@ -73,7 +74,7 @@ public:
     inline static Graph graph;
     inline static Kdtree::KdTree *kdTree;
     inline static vector<VectorXd> pointsKDTree = {};
-    inline static mutex mutexUpdateKDTree;
+    inline static shared_timed_mutex mutexUpdateKDTree;
     inline static mutex mutexReplanOmega;
     inline static mutex mutexUpdateGraph;
     inline static vector<DataForDebug> dataForDebug = {};
@@ -81,12 +82,14 @@ public:
     inline static vector<Edge *> currentPath = {};
     inline static int currentIndexPath = -1;
     inline static VectorXd explorationPosition = VectorXd::Zero(3);  
-    //inline static VectorXd bconstraint = VectorXd::Zero(3);
     inline static ros::ServiceClient* neighborhClient;
     inline static ros::ServiceClient* frontierClient;
     inline static tf::TransformListener* tflistener;
     inline static tf::StampedTransform* transform;
+    inline static vector<RobotPose> commitedPath;
+    
     inline static bool safetyMode = false;
+
 
 
     //inline static bool replanOmegaWorking = false;

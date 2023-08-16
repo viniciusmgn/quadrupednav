@@ -52,7 +52,9 @@ namespace CBFCirc
         dfd.gradSafetyOrientation = Global::gradSafetyOrientation;
         dfd.witnessDistance = Global::witnessDistance;
         dfd.currentLidarPoints = getLidarPointsSource(getRobotPose().position, Global::param.sensingRadius);
+        Global::mutexUpdateKDTree.lock_shared();
         dfd.currentLidarPointsKDTree = getLidarPointsKDTree(getRobotPose().position, Global::param.sensingRadius);
+        Global::mutexUpdateKDTree.unlock_shared();
         dfd.currentGoalPosition = Global::currentGoalPosition;
         dfd.generateManyPathResult = Global::generateManyPathResult;
         dfd.currentOmega = Global::currentOmega;
@@ -63,6 +65,8 @@ namespace CBFCirc
         dfd.currentPath = Global::currentPath;
         dfd.currentIndexPath = Global::currentIndexPath;
         dfd.explorationPosition = Global::explorationPosition;
+        dfd.commitedPath = Global::commitedPath;
+
         Global::dataForDebug.push_back(dfd);
     }
 
@@ -95,7 +99,6 @@ namespace CBFCirc
             if (((Global::currentOmega - Global::generateManyPathResult.bestOmega).norm() > VERYSMALLNUMBER))
                 debug_addMessage(counter, "Changed sense of circulation");
         }
-        
     }
 
     void debug_printAlgStateToMatlab(ofstream *f)
@@ -135,6 +138,8 @@ namespace CBFCirc
         *f << "currentIndexPath = load([dirData '/currentIndexPath.csv']);" << std::endl;
         *f << "explorationPosition = load([dirData '/explorationPosition.csv']);" << std::endl;
         *f << "messages = processMessageTable(readtable([dirData '/messages.csv']),generalCounter);" << std::endl;
+        *f << "commitedPos = processCell(load([dirData '/commitedPos.csv']));" << std::endl;
+        *f << "commitedOri = processCell(load([dirData '/commitedOri.csv']));" << std::endl;
 
         // Write planned paths
         vector<string> names = {};
@@ -456,18 +461,44 @@ namespace CBFCirc
         f->flush();
         f->close();
 
-        // // WRITE: bconstraint
-        // f->open("/home/vinicius/Desktop/matlab/unitree_planning/" + fname + "/bconstraint.csv", ofstream::trunc);
-        // tempVector = {};
-        // for (int i = 0; i < Global::dataForDebug.size(); i++)
-        //     tempVector.push_back(Global::dataForDebug[i].bconstraint);
+        // WRITE: commited position and orientation
+        double fat = 3 * Global::param.sampleStorePath;
 
-        // printVectorsToCSV(f, tempVector);
-        // f->flush();
-        // f->close();
+        f->open("/home/vinicius/Desktop/matlab/unitree_planning/" + fname + "/commitedPos.csv", ofstream::trunc);
+        tempVectorVector = {};
+        for (int i = 0; i < Global::dataForDebug.size(); i++)
+        {
+            tempVector = {};
+            for (int j = 0; j < Global::dataForDebug[i].commitedPath.size() / fat; j++)
+                tempVector.push_back(Global::dataForDebug[i].commitedPath[fat * j].position);
+
+            tempVectorVector.push_back(tempVector);
+        }
+        printVectorVectorsToCSV(f, tempVectorVector, 3);
+        f->flush();
+        f->close();
+
+        f->open("/home/vinicius/Desktop/matlab/unitree_planning/" + fname + "/commitedOri.csv", ofstream::trunc);
+        tempVectorVector = {};
+        for (int i = 0; i < Global::dataForDebug.size(); i++)
+        {
+            tempVector = {};
+            for (int j = 0; j < Global::dataForDebug[i].commitedPath.size() / fat; j++)
+            {
+                VectorXd data = VectorXd::Ones(1);
+                data << Global::dataForDebug[i].commitedPath[fat * j].orientation;
+                tempVector.push_back(data);
+            }
+
+            tempVectorVector.push_back(tempVector);
+        }
+        printVectorVectorsToCSV(f, tempVectorVector, 1);
+        f->flush();
+        f->close();
 
         // WRITE: planned paths
-        double fat = Global::param.sampleStorePath;
+        fat = Global::param.sampleStorePath;
+
         for (int k = 0; k < names.size(); k++)
         {
             f->open("/home/vinicius/Desktop/matlab/unitree_planning/" + fname + "/plannedPos" + names[k] + ".csv", ofstream::trunc);

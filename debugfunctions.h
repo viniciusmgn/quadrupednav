@@ -46,6 +46,8 @@ namespace CBFCirc
         vector<Edge *> currentPath;
         int currentIndexPath;
         VectorXd explorationPosition;
+        vector<RobotPose> commitedPath;
+
 
         //VectorXd bconstraint;
     };

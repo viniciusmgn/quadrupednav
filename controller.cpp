@@ -86,26 +86,11 @@ void setLinearVelocity(VectorXd linearVelocity)
 {
 
     double theta = getRobotPose().orientation;
-    Vector2d normVelocity = linearVelocity.normalized();
+    Vector3d normVelocity = linearVelocity.normalized();
     double angularVelocity = Global::param.gainRobotYaw * (cos(theta) * normVelocity[1] - sin(theta) * normVelocity[0]);
 
     setTwist(linearVelocity, angularVelocity);
 }
-
-// void poseCallback(const nav_msgs::Odometry::ConstPtr &msg)
-// {
-//     Global::position << (*msg).pose.pose.position.x, (*msg).pose.pose.position.y, Global::param.constantHeight;
-
-//     double coshalfv = (*msg).pose.pose.orientation.w;
-//     double sinhalfv = sqrt(pow((*msg).pose.pose.orientation.x, 2) + pow((*msg).pose.pose.orientation.y, 2) + pow((*msg).pose.pose.orientation.z, 2));
-
-//     if ((*msg).pose.pose.orientation.z < 0)
-//         sinhalfv = -sinhalfv;
-
-//     Global::orientation = 2 * atan2(sinhalfv, coshalfv);
-
-//     Global::measured = true;
-// }
 
 void updatePose(const ros::TimerEvent &e)
 {
@@ -140,32 +125,6 @@ void updatePose(const ros::TimerEvent &e)
         ros::Duration(0.02).sleep();
     }
 }
-
-// vector<VectorXd> createRectangle(double xcenter, double ycenter, double xlength, double ylength, double angRot)
-// {
-//     double SEP = 0.3;
-//     vector<VectorXd> points = {};
-
-//     double C = cos(angRot);
-//     double S = sin(angRot);
-
-//     for (int i = 0; i < round(xlength / SEP); i++)
-//         for (int j = 0; j < round(ylength / SEP); j++)
-//         {
-//             double x = -xlength / 2 + SEP * i;
-//             double y = -ylength / 2 + SEP * j;
-//             double xmod = C * x - S * y + xcenter;
-//             double ymod = -S * x + C * y + ycenter;
-//             VectorXd p = VectorXd::Zero(3);
-//             p << xmod, ymod, Global::param.constantHeight;
-
-//             points.push_back(p);
-//         }
-
-//     return points;
-// }
-
-// vector<VectorXd> allThePoints = {};
 
 vector<vector<VectorXd>> getFrontierPoints()
 {
@@ -203,12 +162,6 @@ vector<vector<VectorXd>> getFrontierPoints()
 
 vector<VectorXd> getLidarPointsSource(VectorXd position, double radius)
 {
-    // vector<VectorXd> points = {};
-    // for (int i = 0; i < allThePoints.size(); i++)
-    //     if ((allThePoints[i] - position).norm() <= radius)
-    //         points.push_back(allThePoints[i]);
-
-    // return points;
     vector<VectorXd> points;
 
     octomap_with_query::neighbor_points srv;
@@ -244,7 +197,7 @@ vector<VectorXd> getLidarPointsKDTree(VectorXd position, double radius)
 
     if (Global::pointsKDTree.size() > 0)
     {
-        Global::mutexUpdateKDTree.lock();
+        //Global::mutexUpdateKDTree.lock();
 
         vector<double> positionV(3);
         positionV[0] = position[0];
@@ -260,7 +213,7 @@ vector<VectorXd> getLidarPointsKDTree(VectorXd position, double radius)
             points.push_back(ptemp);
         }
 
-        Global::mutexUpdateKDTree.unlock();
+        //Global::mutexUpdateKDTree.unlock();
     }
 
     return points;
@@ -268,47 +221,44 @@ vector<VectorXd> getLidarPointsKDTree(VectorXd position, double radius)
 
 // MAIN FUNCTIONS
 
+
+
 void lowLevelMovement()
 {
     while (ros::ok() && Global::continueAlgorithm)
     {
         if (Global::measured && Global::firstPlanCreated)
         {
-            vector<VectorXd> obsPoints = getLidarPointsSource(getRobotPose().position, Global::param.sensingRadius);
-            CBFCircControllerResult cccr = CBFCircController(getRobotPose(), Global::currentGoalPosition,
-                                                             obsPoints, Global::currentOmega, Global::param);
-
-            if (!Global::safetyMode && cccr.distanceResult.distance < 0)
+            if (Global::planningState != MotionPlanningState::planning)
             {
-                debug_addMessage(Global::generalCounter, "Safety mode started!");
-                Global::safetyMode = true;
-            }
+                vector<VectorXd> obsPoints = getLidarPointsSource(getRobotPose().position, Global::param.sensingRadius);
+                // CBFCircControllerResult cccr = CBFCircController(getRobotPose(), Global::currentGoalPosition,
+                //                                                  obsPoints, Global::currentOmega, Global::param);
 
-            if (Global::safetyMode && cccr.distanceResult.distance > 0.25)
-            {
-                debug_addMessage(Global::generalCounter, "Safety mode ended!");
-                Global::safetyMode = false;
-            }
+                VectorFieldResult vfr = vectorField(getRobotPose(), Global::commitedPath, Global::param);
+                CBFControllerResult cccr = CBFController(getRobotPose(), vfr.linearVelocity, vfr.angularVelocity,
+                                                         obsPoints, Global::param);
 
-            if (!Global::safetyMode)
-            {
+
+
                 // Send the twist
-                setTwist(cccr.linearVelocity, cccr.angularVelocity);
+                //setTwist(cccr.linearVelocity, cccr.angularVelocity);
+                //setTwist(0.3 * vfr.linearVelocity, 1.6*vfr.angularVelocity);
+                setTwist(vfr.linearVelocity, vfr.angularVelocity);
+                //setTwist(old_lv, old_av);
+                
+
+                // Refresh some variables
+                Global::distance = cccr.distanceResult.distance;
+                Global::safety = cccr.distanceResult.safety;
+                Global::gradSafetyPosition = cccr.distanceResult.gradSafetyPosition;
+                Global::gradSafetyOrientation = cccr.distanceResult.gradSafetyOrientation;
+                Global::witnessDistance = cccr.distanceResult.witnessDistance;
             }
             else
             {
-                VectorXd linearVelocity = VectorXd::Zero(3);
-                VectorXd gradSafetyPosition = Global::param.maxTotalVel * cccr.distanceResult.gradSafetyPosition.normalized();
-                linearVelocity << gradSafetyPosition[0], gradSafetyPosition[1], 0;
-                setTwist(linearVelocity, 0);
+                setTwist(VectorXd::Zero(3), 0);
             }
-
-            // Refresh some variables
-            Global::distance = cccr.distanceResult.distance;
-            Global::safety = cccr.distanceResult.safety;
-            Global::gradSafetyPosition = cccr.distanceResult.gradSafetyPosition;
-            Global::gradSafetyOrientation = cccr.distanceResult.gradSafetyOrientation;
-            Global::witnessDistance = cccr.distanceResult.witnessDistance;
         }
     }
 }
@@ -316,11 +266,13 @@ void lowLevelMovement()
 void replanOmegaCall()
 {
     Global::mutexReplanOmega.lock();
+    Global::mutexUpdateKDTree.lock_shared();
 
     Global::generateManyPathResult = CBFCircPlanMany(getRobotPose(), Global::currentGoalPosition, getLidarPointsKDTree,
-                                                     Global::param.maxTimePlanner, Global::param.plannerReachError, Global::param);
+                                                     Global::param.maxTimePlanner, Global::param.plannerOmegaPlanReachError, Global::param);
 
-    Global::firstPlanCreated = true;
+    if (Global::generateManyPathResult.atLeastOnePathReached)
+        Global::commitedPath = optimizePath(Global::generateManyPathResult.bestPath.path, getLidarPointsKDTree, Global::param);
 
     // DEBUG
     int counter = Global::generalCounter;
@@ -332,6 +284,7 @@ void replanOmegaCall()
     if (Global::generateManyPathResult.atLeastOnePathReached)
     {
         Global::currentOmega = Global::generateManyPathResult.bestOmega;
+        Global::firstPlanCreated = true;
     }
     else
     {
@@ -354,6 +307,7 @@ void replanOmegaCall()
         NewExplorationPointResult nepr = Global::graph.getNewExplorationPoint(getRobotPose(), getLidarPointsKDTree,
                                                                               frontierPoints, Global::param);
         Global::mutexUpdateGraph.unlock();
+        
 
         if (nepr.success)
         {
@@ -373,8 +327,10 @@ void replanOmegaCall()
             // DEBUG
 
             Global::mutexReplanOmega.unlock();
+            Global::mutexUpdateKDTree.unlock_shared();
             replanOmegaCall();
             Global::mutexReplanOmega.lock();
+            Global::mutexUpdateKDTree.lock_shared();
         }
         else
         {
@@ -384,6 +340,7 @@ void replanOmegaCall()
             Global::continueAlgorithm = false;
         }
     }
+    Global::mutexUpdateKDTree.unlock_shared();
     Global::mutexReplanOmega.unlock();
 }
 
@@ -398,6 +355,8 @@ void updateGraphCall()
 {
 
     Global::mutexUpdateGraph.lock();
+    Global::mutexUpdateKDTree.lock_shared();
+
     VectorXd currentPoint = getRobotPose().position;
     VectorXd correctedPoint = correctPoint(currentPoint, getLidarPointsKDTree(getRobotPose().position, Global::param.sensingRadius), Global::param);
 
@@ -431,6 +390,7 @@ void updateGraphCall()
         }
     }
 
+    Global::mutexUpdateKDTree.unlock_shared();
     Global::mutexUpdateGraph.unlock();
 }
 
