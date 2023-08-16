@@ -157,7 +157,29 @@ vector<vector<VectorXd>> getFrontierPoints()
             frontierPoints[srv.response.cluster_id[i] - idMin].push_back(newPoint);
         }
     }
-    return frontierPoints;
+
+    //Filter frontier points
+    vector<vector<VectorXd>> frontierPointsFiltered = {};
+    Global::mutexUpdateKDTree.lock_shared();
+    for(int i =0; i < frontierPoints.size(); i++)
+    {
+        double maxDist = 0;
+        for(int j=0; j < frontierPoints[i].size(); j++)
+        {
+            vector<VectorXd> points = getLidarPointsKDTree(frontierPoints[i][j], Global::param.sensingRadius);
+            double dist = VERYBIGNUMBER;
+            for(int k=0; k < points.size(); k++)
+                dist = min(dist, (points[k]-frontierPoints[i][j]).norm());
+            
+            maxDist = max(maxDist, dist);
+        }
+        if(maxDist > Global::param.distanceMargin+max(Global::param.boundingRadius, Global::param.boundingHeight/2))
+            frontierPointsFiltered.push_back(frontierPoints[i]);
+            
+    }
+    Global::mutexUpdateKDTree.unlock_shared();
+
+    return frontierPointsFiltered;
 }
 
 vector<VectorXd> getLidarPointsSource(VectorXd position, double radius)
