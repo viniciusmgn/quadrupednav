@@ -97,7 +97,7 @@ namespace CBFCirc
 
         VectorXd ud = vectorVertStack(vd, 0);
 
-        MatrixXd H = 2 * (H1 + 4 * H2);
+        MatrixXd H = 2 * (H1 + H2); //2 * (H1 + 4 * H2)
         VectorXd f = -2 * ud;
         MatrixXd A = MatrixXd::Zero(1, 3);
         A << dr.gradSafetyPosition[0], dr.gradSafetyPosition[1], dr.gradSafetyOrientation;
