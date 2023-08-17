@@ -29,10 +29,10 @@ namespace CBFCirc
         double gainTargetController = 0.4; // 0.2
         double alphaCBFPositive = 1.0;
         double alphaCBFNegative = 6;   // 7.5
-        double distanceMinBeta = 0.50; // 0.5 0.3 0.4
+        double distanceMinBeta = 0.40; // 0.5 0.3 0.4 0.50
         double maxVelCircBeta = 1.25;  // 0.5 0.5
         double maxTotalVel = 0.3;
-        double distanceMargin = 0.15; // 0.20
+        double distanceMarginPlan = 0.05; // 0.20
 
         double deltaTimePlanner = 0.2;   // 0.1
         double maxTimePlanner = 120;     // 50 100
@@ -50,14 +50,19 @@ namespace CBFCirc
         double stepCorrectPoint = 0.1;
         double radiusCreateNode = 1.5; // 0.8
         double maxTimePlanConnectNode = 50;
+        double acceptableMinDist=1.0;
 
         double minDistFilterKDTree = 0.15; // 0.3
 
         int sampleStorePath = 15;
 
         double maxTimeSampleExploration = 80;
+        double deltaTimeSampleExploration = 0.5;
         int noTriesClosestPoint = 5;
         VectorXd globalTargetPosition = vec3d(7, 0, -0.1725); // vec3d(10,1,-0.1725)
+
+
+        double distanceMarginLowLevel = 0.15; // 0.20
     };
 
     struct DistanceResult
@@ -139,7 +144,7 @@ namespace CBFCirc
         pathToExploration,
         goingToExplore,
         planning,
-        sucess,
+        success,
         failure
     };
 
@@ -149,10 +154,10 @@ namespace CBFCirc
     CBFCircControllerResult CBFCircController(RobotPose pose, VectorXd targetPosition, vector<VectorXd> neighborPoints, Matrix3d omega,
                                               Parameters param);
     GeneratePathResult CBFCircPlanOne(RobotPose startingPose, VectorXd targetPosition, MapQuerier querier, Matrix3d omega,
-                                      double maxTime, double reachpointError, Parameters param);
+                                      double maxTime, double reachpointError, double deltaTime, Parameters param);
     double curveLength(vector<RobotPose> posePath);
     GenerateManyPathsResult CBFCircPlanMany(RobotPose startingPose, VectorXd targetPosition, MapQuerier querier,
-                                            double maxTime, double reachpointError, Parameters param);
+                                            double maxTime, double reachpointError, double deltaTime, Parameters param);
     RadialDistanceResult computeDistRadial(vector<VectorXd> points, VectorXd position, double smoothingParam);
     VectorXd correctPoint(VectorXd point, vector<VectorXd> neighborPoints, Parameters param);
     bool pathFree(vector<RobotPose> path, MapQuerier querier, int initialIndex, int finalIndex, Parameters param);

@@ -104,7 +104,6 @@ void updatePose(const ros::TimerEvent &e)
         double py = Global::transform->getOrigin().y();
         // double pz = Global::transform->getOrigin().z();
         double pz = Global::param.constantHeight;
-
         double x = Global::transform->getRotation().x();
         double y = Global::transform->getRotation().y();
         double z = Global::transform->getRotation().z();
@@ -118,6 +117,7 @@ void updatePose(const ros::TimerEvent &e)
 
         Global::position << px, py, pz;
         Global::orientation = 2 * atan2(sinhalfv, coshalfv);
+        Global::measuredHeight = Global::transform->getOrigin().z();
         Global::measured = true;
     }
     catch (tf::TransformException ex)
@@ -200,7 +200,8 @@ vector<VectorXd> getLidarPointsSource(VectorXd position, double radius)
         for (int i = 0; i < srv.response.neighbors.size() / fact; i++)
         {
             double z = srv.response.neighbors[fact * i].z;
-            if (z >= Global::param.constantHeight - 0.3 && z <= Global::param.constantHeight + 0.3)
+            //if (z >= Global::param.constantHeight - 0.3 && z <= Global::param.constantHeight + 0.3)
+            if (z >= Global::measuredHeight - 0.1 && z <= Global::measuredHeight + 0.1)
             {
                 VectorXd newPoint = VectorXd::Zero(3);
                 newPoint << srv.response.neighbors[fact * i].x, srv.response.neighbors[fact * i].y, Global::param.constantHeight;
@@ -251,17 +252,12 @@ void lowLevelMovement()
     {
         if (Global::measured && Global::firstPlanCreated)
         {
-            if (Global::planningState != MotionPlanningState::planning)
+            if (Global::planningState != MotionPlanningState::planning && Global::commitedPath.size()>1)
             {
                 vector<VectorXd> obsPoints = getLidarPointsSource(getRobotPose().position, Global::param.sensingRadius);
-                //CBFCircControllerResult cccr = CBFCircController(getRobotPose(), Global::currentGoalPosition,
-                //                                                  obsPoints, Global::currentOmega, Global::param);
-
                 VectorFieldResult vfr = vectorField(getRobotPose(), Global::commitedPath, Global::param);
                 CBFControllerResult cccr = CBFController(getRobotPose(), vfr.linearVelocity, vfr.angularVelocity,
                                                          obsPoints, Global::param);
-
-
 
                 // Send the twist
                 setTwist(cccr.linearVelocity, cccr.angularVelocity);
@@ -287,7 +283,8 @@ void replanOmegaCall()
     Global::mutexUpdateKDTree.lock_shared();
 
     Global::generateManyPathResult = CBFCircPlanMany(getRobotPose(), Global::currentGoalPosition, getLidarPointsKDTree,
-                                                     Global::param.maxTimePlanner, Global::param.plannerOmegaPlanReachError, Global::param);
+                                                     Global::param.maxTimePlanner, Global::param.plannerOmegaPlanReachError, 
+                                                     Global::param.deltaTimePlanner, Global::param);
 
     if (Global::generateManyPathResult.atLeastOnePathReached)
         Global::commitedPath = optimizePath(Global::generateManyPathResult.bestPath.path, getLidarPointsKDTree, Global::param);
@@ -310,8 +307,8 @@ void replanOmegaCall()
         debug_addMessage(counter, "Failed to find path... plan to explore frontier!");
 
         Global::planningState = MotionPlanningState::planning;
-        Global::currentGoalPosition = getRobotPose().position;
-        Global::currentOmega = Matrix3d::Zero(3, 3);
+        //Global::currentGoalPosition = getRobotPose().position;
+        //Global::currentOmega = Matrix3d::Zero(3, 3);
         vector<vector<VectorXd>> frontierPoints = getFrontierPoints();
         while (frontierPoints.size() == 0)
         {
@@ -320,7 +317,9 @@ void replanOmegaCall()
             frontierPoints = getFrontierPoints();
         }
 
+        ROS_INFO_STREAM("Updating graph for planning");
         updateGraphCall(true);
+        ROS_INFO_STREAM("Ended updating graph");
         Global::mutexUpdateGraph.lock();
         NewExplorationPointResult nepr = Global::graph.getNewExplorationPoint(getRobotPose(), getLidarPointsKDTree,
                                                                               frontierPoints, Global::param);
@@ -386,20 +385,28 @@ void updateGraphCall(bool forceUpdate)
         vector<int> indexes;
         vector<Matrix3d> omegas;
 
-        for (int i = 0; i < Global::graph.nodes.size(); i++)
+        int i = 0;
+        bool cont=true;
+
+        while(cont)
         {
             RobotPose pose;
             pose.position = Global::graph.nodes[i]->position;
             pose.orientation = 0;
 
             GenerateManyPathsResult gmpr = CBFCircPlanMany(pose, correctedPoint, getLidarPointsKDTree,
-                                                           Global::param.maxTimePlanConnectNode, Global::param.plannerReachError, Global::param);
+                                                           Global::param.maxTimePlanConnectNode, Global::param.plannerReachError, 
+                                                           Global::param.deltaTimePlanner, Global::param);
             if (gmpr.atLeastOnePathReached)
             {
                 indexes.push_back(i);
                 omegas.push_back(gmpr.bestOmega);
                 distances.push_back(gmpr.bestPathSize);
+                cont = gmpr.bestPathSize > Global::param.acceptableMinDist;
             }
+
+            i++;
+            cont = cont && (i < Global::graph.nodes.size());
         }
 
         if (distances.size() > 0)
@@ -494,7 +501,7 @@ void transitionAlg()
 
             if ((Global::planningState == MotionPlanningState::goingToGlobalGoal) && pointReached)
             {
-                Global::planningState = MotionPlanningState::sucess;
+                Global::planningState = MotionPlanningState::success;
                 Global::continueAlgorithm = false;
 
                 // DEBUG
@@ -629,7 +636,7 @@ int main(int argc, char **argv)
         if (Global::measured)
         {
 
-            if (Global::generalCounter % Global::param.freqDisplayMessage == 0)
+            if (Global::generalCounter % Global::param.freqDisplayMessage == 0 && (Global::planningState != MotionPlanningState::planning))
             {
                 if (Global::planningState == MotionPlanningState::goingToGlobalGoal)
                 {
@@ -643,10 +650,6 @@ int main(int argc, char **argv)
                 if (Global::planningState == MotionPlanningState::goingToExplore)
                 {
                     ROS_INFO_STREAM("---------GOING TO EXPLORE--------");
-                }
-                if (Global::planningState == MotionPlanningState::planning)
-                {
-                    ROS_INFO_STREAM("---------PLANNING--------");
                 }
                 // ROS_INFO_STREAM("counter = " << Global::generalCounter);
                 // ROS_INFO_STREAM("linvelocity = " << printVector(Global::desLinVelocity));

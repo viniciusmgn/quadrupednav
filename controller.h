@@ -87,8 +87,7 @@ public:
     inline static tf::TransformListener* tflistener;
     inline static tf::StampedTransform* transform;
     inline static vector<RobotPose> commitedPath;
-    
-    inline static bool safetyMode = false;
+    inline static double measuredHeight;
 
 
 

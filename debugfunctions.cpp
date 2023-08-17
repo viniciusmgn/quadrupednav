@@ -90,7 +90,7 @@ namespace CBFCirc
             if (Global::generateManyPathResult.pathResults[k].pathState == PathState::timeout)
             {
                 string errorToGoal = std::to_string(Global::generateManyPathResult.pathResults[k].finalError);
-                string minimumError = std::to_string(Global::param.plannerReachError);
+                string minimumError = std::to_string(Global::param.plannerOmegaPlanReachError);
                 debug_addMessage(counter, "Path " + pathName + " timeout! Error to path was " + errorToGoal + " but minimum is " + minimumError);
             }
         }
@@ -367,16 +367,16 @@ namespace CBFCirc
             tempVector = {};
             for (int j = 0; j < Global::dataForDebug[i].graph.edges.size(); j++)
             {
-                VectorXd edge = VectorXd::Zero(2);
+                VectorXd edge = VectorXd::Zero(3);
                 int inNode = Global::dataForDebug[i].graph.edges[j]->nodeIn->id;
                 int outNode = Global::dataForDebug[i].graph.edges[j]->nodeOut->id;
-                edge << (double)inNode, (double)outNode;
+                edge << (double)inNode, (double)outNode , Global::dataForDebug[i].graph.edges[j]->weight;
                 tempVector.push_back(edge);
             }
 
             tempVectorVector.push_back(tempVector);
         }
-        printVectorVectorsToCSV(f, tempVectorVector, 2);
+        printVectorVectorsToCSV(f, tempVectorVector, 3);
         f->flush();
         f->close();
 
@@ -583,6 +583,8 @@ namespace CBFCirc
             f->flush();
             f->close();
         }
+
+
     }
 
 }

@@ -104,10 +104,10 @@ namespace CBFCirc
         VectorXd b = VectorXd::Zero(1);
 
         double cbfConst;
-        if (dr.distance - param.distanceMargin > 0)
-            cbfConst = -param.alphaCBFPositive * (dr.distance - param.distanceMargin);
+        if (dr.distance - param.distanceMarginPlan > 0)
+            cbfConst = -param.alphaCBFPositive * (dr.distance - param.distanceMarginPlan);
         else
-            cbfConst = -param.alphaCBFNegative * (dr.distance - param.distanceMargin);
+            cbfConst = -param.alphaCBFNegative * (dr.distance - param.distanceMarginPlan);
 
         b << cbfConst;
 
@@ -146,13 +146,14 @@ namespace CBFCirc
         return cccr;
     }
 
-    GeneratePathResult CBFCircPlanOne(RobotPose startingPose, VectorXd targetPosition, MapQuerier querier, Matrix3d omega, double maxTime, double reachpointError, Parameters param)
+    GeneratePathResult CBFCircPlanOne(RobotPose startingPose, VectorXd targetPosition, MapQuerier querier, Matrix3d omega,
+                                      double maxTime, double reachpointError, double deltaTime, Parameters param)
     {
         GeneratePathResult gpr;
         RobotPose pose = startingPose;
         double time = 0;
         bool cont = true;
-        double dt;
+  
 
         gpr.pathState = PathState::sucess;
         gpr.path = {};
@@ -170,9 +171,9 @@ namespace CBFCirc
                 gpr.pathGradSafetyOrientation.push_back(cccr.distanceResult.gradSafetyOrientation);
                 gpr.pathDistance.push_back(cccr.distanceResult.distance);
 
-                pose.position += cccr.linearVelocity * param.deltaTimePlanner;
-                pose.orientation += cccr.angularVelocity * param.deltaTimePlanner;
-                time += param.deltaTimePlanner;
+                pose.position += cccr.linearVelocity * deltaTime;
+                pose.orientation += cccr.angularVelocity * deltaTime;
+                time += deltaTime;
 
                 cont = (gpr.path[gpr.path.size() - 1].position - targetPosition).norm() > reachpointError;
             }
@@ -203,7 +204,8 @@ namespace CBFCirc
         return length;
     }
 
-    GenerateManyPathsResult CBFCircPlanMany(RobotPose startingPose, VectorXd targetPosition, MapQuerier querier, double maxTime, double reachpointError, Parameters param)
+    GenerateManyPathsResult CBFCircPlanMany(RobotPose startingPose, VectorXd targetPosition, MapQuerier querier, double maxTime,
+                                            double reachpointError, double deltaTime, Parameters param)
     {
         GenerateManyPathsResult gmpr;
 
@@ -215,7 +217,7 @@ namespace CBFCirc
 
         for (int i = 0; i < gmpr.pathOmega.size(); i++)
         {
-            GeneratePathResult gpr = CBFCircPlanOne(startingPose, targetPosition, querier, gmpr.pathOmega[i], maxTimeTemp, reachpointError, param);
+            GeneratePathResult gpr = CBFCircPlanOne(startingPose, targetPosition, querier, gmpr.pathOmega[i], maxTimeTemp, reachpointError, deltaTime, param);
             double distToGoal = (startingPose.position - targetPosition).norm();
             gmpr.pathResults.push_back(gpr);
             gmpr.pathLenghts.push_back((gpr.pathState == PathState::sucess) ? curveLength(gpr.path) : VERYBIGNUMBER + distToGoal);
@@ -330,14 +332,14 @@ namespace CBFCirc
         for (int i = 0; i < originalPath.size(); i++)
         {
             double fat = 16 * pow(pathLength[i] * (1 - pathLength[i]), 2);
-            
-            //fat = 4 * pathLength[i] * (1 - pathLength[i]);
 
-            for (int j = 0; j < 5; j++)
+            // fat = 4 * pathLength[i] * (1 - pathLength[i]);
+
+            for (int j = 0; j < 7; j++)
             {
                 DistanceResult dr = computeDist(querier(modifiedPath[i].position, param.sensingRadius), modifiedPath[i], param);
 
-                fat = sqrt(1.0 + VERYSMALLNUMBER - pathLength[i])*max(0.0,1.0-dr.distance/0.60);
+                fat = sqrt(1.0 + VERYSMALLNUMBER - pathLength[i]) * max(0.0, 1.0 - dr.distance / 0.60);
 
                 double norm = sqrt(dr.gradSafetyPosition.squaredNorm() + pow(dr.gradSafetyOrientation, 2)) + VERYSMALLNUMBER;
                 modifiedPath[i].position += fat * 0.15 * dr.gradSafetyPosition / norm;
@@ -419,7 +421,7 @@ namespace CBFCirc
         for (int i = 0; i < path.size(); i++)
         {
             dminTemp = sqrt((path[i].position - pose.position).squaredNorm() + (1.0 - cos(path[i].orientation - pose.orientation)));
-            //dminTemp = sqrt((path[i].position - pose.position).squaredNorm());
+            // dminTemp = sqrt((path[i].position - pose.position).squaredNorm());
             if (dminTemp < dmin)
             {
                 dmin = dminTemp;
@@ -450,8 +452,8 @@ namespace CBFCirc
         }
         else
         {
-            double dcos = cos(path[ind].orientation) - cos(path[ind-1].orientation);
-            double dsin = sin(path[ind].orientation) - sin(path[ind-1].orientation);
+            double dcos = cos(path[ind].orientation) - cos(path[ind - 1].orientation);
+            double dsin = sin(path[ind].orientation) - sin(path[ind - 1].orientation);
             double dtheta = -sin(path[ind].orientation) * dcos + cos(path[ind].orientation) * dsin;
             T = vec3d(path[ind].position[0] - path[ind - 1].position[0], path[ind].position[1] - path[ind - 1].position[1], dtheta);
         }
@@ -484,10 +486,10 @@ namespace CBFCirc
         VectorXd b = VectorXd::Zero(1);
 
         double cbfConst;
-        if (dr.distance - param.distanceMargin > 0)
-            cbfConst = -param.alphaCBFPositive * (dr.distance - param.distanceMargin);
+        if (dr.distance - param.distanceMarginPlan > 0)
+            cbfConst = -param.alphaCBFPositive * (dr.distance - param.distanceMarginLowLevel);
         else
-            cbfConst = -param.alphaCBFNegative * (dr.distance - param.distanceMargin);
+            cbfConst = -param.alphaCBFNegative * (dr.distance - param.distanceMarginLowLevel);
 
         b << cbfConst;
 

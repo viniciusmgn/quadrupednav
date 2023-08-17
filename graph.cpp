@@ -8,9 +8,12 @@
 #include <vector>
 #include <random>
 #include <memory>
+#include <chrono>
+
 
 using namespace std;
 using namespace Eigen;
+using namespace std::chrono;
 
 #include "graph.h"
 #include "utils.h"
@@ -147,16 +150,21 @@ namespace CBFCirc
         bool triedAll = false;
         int k = 0;
 
+        ROS_INFO_STREAM("Start planning. Trying to find entry point.");
+        auto start = high_resolution_clock::now();
         do
         {
             closestNodeToPosition = closestNodesToCurrent[k];
             k++;
             found = CBFCircPlanMany(pose, closestNodeToPosition->position, querier, param.maxTimeSampleExploration,
-                                    param.plannerReachError, param)
+                                    param.plannerReachError, param.deltaTimeSampleExploration, param)
                         .atLeastOnePathReached;
 
             triedAll = k >= closestNodesToCurrent.size();
         } while (!found && !triedAll);
+        auto stop = high_resolution_clock::now();
+        auto duration = duration_cast<microseconds>(stop - start);
+        ROS_INFO_STREAM("Finished in "<<((double) duration.count()/1000000.0)<<" seconds!");
 
         if (!found)
         {
@@ -164,7 +172,11 @@ namespace CBFCirc
             sntr.success = false;
         }
         else
+        {
+            ROS_INFO_STREAM("Success to go to a point of the graph ("<<k<<" out of "<<closestNodesToCurrent.size()<<")");
             sntr.success = true;
+        }
+            
 
         ROS_INFO_STREAM("Starting frontier exploration (Type A)..." << frontier.size() << " clusters found");
 
@@ -203,7 +215,7 @@ namespace CBFCirc
                         poseTry.orientation = 0;
 
                         GenerateManyPathsResult gmpr1 = CBFCircPlanMany(poseTry, bestPoint, querier, param.maxTimeSampleExploration, param.plannerReachError,
-                                                                        param);
+                                                                        param.deltaTimeSampleExploration, param);
                         if (gmpr1.bestPathSize <= bestValue)
                         {
                             bestValue = gmpr1.bestPathSize;
@@ -218,10 +230,11 @@ namespace CBFCirc
                         poseBestPoint.position = bestPoint;
                         poseBestPoint.orientation = 0;
                         GenerateManyPathsResult gmpr2 = CBFCircPlanMany(poseBestPoint, param.globalTargetPosition, querier,
-                                                                        param.maxTimeSampleExploration, param.plannerReachError, param);
+                                                                        param.maxTimeSampleExploration, param.plannerReachError, 
+                                                                        param.deltaTimeSampleExploration, param);
 
-                        double dist1 = (closestNodeToPosition->position - pose.position).norm();
-                        double dist2 = computeDistPath(getPath(closestNodeToPosition, bestNodeToExploration));
+                        double dist1 = 100*(closestNodeToPosition->position - pose.position).norm();
+                        double dist2 = 100*computeDistPath(getPath(closestNodeToPosition, bestNodeToExploration));
                         double dist3 = bestValue;
                         double dist4 = gmpr2.bestPathSize;
 
