@@ -105,4 +105,4 @@ RobotPose getRobotPose();
 vector<VectorXd> getLidarPointsKDTree(VectorXd position, double radius);
 vector<VectorXd> getLidarPointsSource(VectorXd position, double radius);
 vector<vector<VectorXd>> getFrontierPoints();
-void updateGraphCall();
+void updateGraphCall(bool forceUpdate);

@@ -173,7 +173,7 @@ vector<vector<VectorXd>> getFrontierPoints()
             
             maxDist = max(maxDist, dist);
         }
-        if(maxDist > Global::param.distanceMargin+max(Global::param.boundingRadius, Global::param.boundingHeight/2))
+        if(maxDist > max(Global::param.boundingRadius, Global::param.boundingHeight/2))
             frontierPointsFiltered.push_back(frontierPoints[i]);
             
     }
@@ -254,7 +254,7 @@ void lowLevelMovement()
             if (Global::planningState != MotionPlanningState::planning)
             {
                 vector<VectorXd> obsPoints = getLidarPointsSource(getRobotPose().position, Global::param.sensingRadius);
-                // CBFCircControllerResult cccr = CBFCircController(getRobotPose(), Global::currentGoalPosition,
+                //CBFCircControllerResult cccr = CBFCircController(getRobotPose(), Global::currentGoalPosition,
                 //                                                  obsPoints, Global::currentOmega, Global::param);
 
                 VectorFieldResult vfr = vectorField(getRobotPose(), Global::commitedPath, Global::param);
@@ -264,11 +264,7 @@ void lowLevelMovement()
 
 
                 // Send the twist
-                //setTwist(cccr.linearVelocity, cccr.angularVelocity);
-                //setTwist(0.3 * vfr.linearVelocity, 1.6*vfr.angularVelocity);
-                setTwist(vfr.linearVelocity, vfr.angularVelocity);
-                //setTwist(old_lv, old_av);
-                
+                setTwist(cccr.linearVelocity, cccr.angularVelocity);
 
                 // Refresh some variables
                 Global::distance = cccr.distanceResult.distance;
@@ -324,7 +320,7 @@ void replanOmegaCall()
             frontierPoints = getFrontierPoints();
         }
 
-        updateGraphCall();
+        updateGraphCall(true);
         Global::mutexUpdateGraph.lock();
         NewExplorationPointResult nepr = Global::graph.getNewExplorationPoint(getRobotPose(), getLidarPointsKDTree,
                                                                               frontierPoints, Global::param);
@@ -340,7 +336,7 @@ void replanOmegaCall()
             Global::currentIndexPath = 0;
             Global::explorationPosition = nepr.bestExplorationPosition;
             Global::currentGoalPosition = Global::currentPath[0]->nodeOut->position;
-            Global::planningState = MotionPlanningState::pathToExploration;
+            //Global::planningState = MotionPlanningState::pathToExploration;
 
             // DEBUG
             debug_addMessage(counter, "Store event: beginning to travel path");
@@ -353,6 +349,8 @@ void replanOmegaCall()
             replanOmegaCall();
             Global::mutexReplanOmega.lock();
             Global::mutexUpdateKDTree.lock_shared();
+
+            Global::planningState = MotionPlanningState::pathToExploration;
         }
         else
         {
@@ -373,7 +371,7 @@ void replanOmega()
             replanOmegaCall();
 }
 
-void updateGraphCall()
+void updateGraphCall(bool forceUpdate)
 {
 
     Global::mutexUpdateGraph.lock();
@@ -382,7 +380,7 @@ void updateGraphCall()
     VectorXd currentPoint = getRobotPose().position;
     VectorXd correctedPoint = correctPoint(currentPoint, getLidarPointsKDTree(getRobotPose().position, Global::param.sensingRadius), Global::param);
 
-    if (Global::graph.getNeighborNodes(correctedPoint, Global::param.radiusCreateNode).size() == 0)
+    if (forceUpdate || (Global::graph.getNeighborNodes(correctedPoint, Global::param.radiusCreateNode).size() == 0))
     {
         vector<double> distances;
         vector<int> indexes;
@@ -409,6 +407,16 @@ void updateGraphCall()
             vector<int> ind = sortGiveIndex(distances);
             Node *newNode = Global::graph.addNode(correctedPoint);
             Global::graph.connect(Global::graph.nodes[indexes[ind[0]]], newNode, distances[ind[0]], omegas[ind[0]]);
+
+            //DEBUG
+            debug_addMessage(Global::generalCounter, "Graph updates with a new node!");
+            //
+        }
+        else
+        {
+            //DEBUG
+            debug_addMessage(Global::generalCounter, "Graph was not updated");
+            //
         }
     }
 
@@ -420,7 +428,7 @@ void updateGraph()
 {
     while (ros::ok() && Global::continueAlgorithm)
         if (Global::measured && (Global::generalCounter % Global::param.freqUpdateGraph == 0))
-            updateGraphCall();
+            updateGraphCall(false);
 }
 
 void updateKDTreeCall()

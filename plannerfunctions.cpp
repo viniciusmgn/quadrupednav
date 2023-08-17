@@ -356,7 +356,7 @@ namespace CBFCirc
         int currentIndex = originalPath.size() - 1;
         int N = 0;
 
-        while (indexPath != originalPath.size() - 1 && N < 5)
+        while (indexPath != originalPath.size() - 1 && N < 10)
         {
             vector<RobotPose> tryPath = generateSimplePath(originalPath, querier, 0, currentIndex, param);
             if (tryPath.size() > 0)
