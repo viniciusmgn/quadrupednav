@@ -593,35 +593,6 @@ int main(int argc, char **argv)
     Global::tflistener = &tflistener;
     Global::transform = &transform;
 
-    //
-
-    // vector<VectorXd> obs1 = createRectangle(4, 1.5 + 0.8 + 4, 1, 8, 0);
-    // vector<VectorXd> obs2 = createRectangle(4, 1.5 - 0.8 - 4, 1, 8, 0);
-
-    // vector<VectorXd> obs3 = createRectangle(6.5, -1.5 + 0.8 + 7, 1, 14, 0);
-    // vector<VectorXd> obs4 = createRectangle(6.5, -1.5 - 0.8 - 3, 1, 6, 0);
-
-    // vector<VectorXd> obs5 = createRectangle(1, -6.8, 10, 1, 0);
-    // vector<VectorXd> obs6 = createRectangle(1, 10, 10, 1, 0);
-
-    // for (int i = 0; i < obs1.size(); i++)
-    //     allThePoints.push_back(obs1[i]);
-
-    // for (int i = 0; i < obs2.size(); i++)
-    //     allThePoints.push_back(obs2[i]);
-
-    // for (int i = 0; i < obs3.size(); i++)
-    //     allThePoints.push_back(obs3[i]);
-
-    // for (int i = 0; i < obs4.size(); i++)
-    //     allThePoints.push_back(obs4[i]);
-
-    // for (int i = 0; i < obs5.size(); i++)
-    //     allThePoints.push_back(obs5[i]);
-
-    // for (int i = 0; i < obs6.size(); i++)
-    //     allThePoints.push_back(obs6[i]);
-
     // Initialize some threads
     std::thread lowLevelMovementThread = thread(lowLevelMovement);
     std::thread replanOmegaThread = thread(replanOmega);
@@ -661,7 +632,7 @@ int main(int argc, char **argv)
             }
 
             // DEBUG
-            if (Global::firstPlanCreated && (Global::generalCounter % Global::param.freqStoreDebug == 0))
+            if (Global::firstPlanCreated && (Global::generalCounter % Global::param.freqStoreDebug == 0) && (Global::planningState != MotionPlanningState::planning))
                 debug_Store(Global::generalCounter);
 
             // DEBUG

@@ -67,6 +67,11 @@ namespace CBFCirc
         dfd.explorationPosition = Global::explorationPosition;
         dfd.commitedPath = Global::commitedPath;
 
+        if(dfd.generalCounter==0)
+        {
+            int ggg=0;
+        }
+
         Global::dataForDebug.push_back(dfd);
     }
 
