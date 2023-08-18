@@ -17,13 +17,13 @@ namespace CBFCirc
 
     struct Parameters
     {
-        double boundingRadius = 0.30; // 0.3
-        double boundingHeight = 1.4;
+        double boundingRadius = 0.35; // 0.3
+        double boundingHeight = 1.45;
         double smoothingParam = 0.5; // 0.1 0.3
 
-        double constantHeight = -0.1725; // 0.8
+        double constantHeight = -0.08; // 0.8 -0.1725
         double marginSafety = 0.4;       // 0.8
-        double sensingRadius = 5.0;      // 3.0
+        double sensingRadius = 5.0;      // 3.0 5.0
 
         double gainRobotYaw = 4.0;         // 2.0 4.0
         double gainTargetController = 0.4; // 0.2
@@ -39,6 +39,7 @@ namespace CBFCirc
         double plannerReachError = 0.50; // 0.25
         double plannerOmegaPlanReachError = 0.30; // 0.25
         double acceptableRationPlanning = 2.0;
+        double acceptableRatioChangeCirc = 0.7;
 
         int freqStoreDebug = 15;
         int freqReplanPath = 250; // 500
@@ -59,8 +60,9 @@ namespace CBFCirc
         double maxTimeSampleExploration = 80;
         double deltaTimeSampleExploration = 0.5;
         int noTriesClosestPoint = 5;
-        VectorXd globalTargetPosition = vec3d(7, 0, -0.1725); // vec3d(10,1,-0.1725)
-
+        //VectorXd globalTargetPosition = vec3d(7, 0, -0.1725); // vec3d(7, 0, -0.1725)
+        //VectorXd globalTargetPosition = vec3d(-7, 1, -0.1725);
+        VectorXd globalTargetPosition = vec3d(-4.25, 5.65, -0.1725);
 
         double distanceMarginLowLevel = 0.15; // 0.20
     };

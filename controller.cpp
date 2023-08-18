@@ -97,8 +97,8 @@ void updatePose(const ros::TimerEvent &e)
 
     try
     {
-        Global::tflistener->lookupTransform("fast_lio", "base_link",
-                                            ros::Time(0), *Global::transform);
+        Global::tflistener->lookupTransform("b1_gazebo/fast_lio", "b1_gazebo/base",
+                                            ros::Time(0), *Global::transform); //base_link
 
         double px = Global::transform->getOrigin().x();
         double py = Global::transform->getOrigin().y();
@@ -193,7 +193,7 @@ vector<VectorXd> getLidarPointsSource(VectorXd position, double radius)
     srv.request.query.y = position[1];
     srv.request.query.z = position[2];
 
-    int fact = 1;
+    int fact = 5;
 
     if (Global::neighborhClient->call(srv))
     {
@@ -260,7 +260,7 @@ void lowLevelMovement()
                                                          obsPoints, Global::param);
 
                 // Send the twist
-                setTwist(cccr.linearVelocity, cccr.angularVelocity);
+                setTwist(1.2*cccr.linearVelocity, 1.2*cccr.angularVelocity);
 
                 // Refresh some variables
                 Global::distance = cccr.distanceResult.distance;
@@ -298,7 +298,25 @@ void replanOmegaCall()
 
     if (Global::generateManyPathResult.atLeastOnePathReached)
     {
-        Global::currentOmega = Global::generateManyPathResult.bestOmega;
+        double lengthCurrentOmega;
+        for(int j = 0; j < Global::generateManyPathResult.pathResults.size(); j++)
+        {
+            if(getMatrixNumber(Global::generateManyPathResult.pathOmega[j]) == getMatrixNumber(Global::currentOmega))
+            {
+                if(Global::generateManyPathResult.pathResults[j].pathState == PathState::sucess)
+                    lengthCurrentOmega = Global::generateManyPathResult.pathLenghts[j];
+                else
+                    lengthCurrentOmega = VERYBIGNUMBER;
+            }
+        }
+        if(Global::generateManyPathResult.bestPathSize < Global::param.acceptableRatioChangeCirc * lengthCurrentOmega)
+        {
+            Global::currentOmega = Global::generateManyPathResult.bestOmega;
+            debug_addMessage(counter, "Circulation changed!");
+        }
+        else
+            debug_addMessage(counter, "Circulation kept because of the ratio!");
+        
         Global::firstPlanCreated = true;
     }
     else
@@ -373,11 +391,17 @@ void replanOmega()
 void updateGraphCall(bool forceUpdate)
 {
 
+    //ROS_INFO_STREAM("Waiting for lock...");
+
     Global::mutexUpdateGraph.lock();
     Global::mutexUpdateKDTree.lock_shared();
 
+    //ROS_INFO_STREAM("Correcting point...");
+
     VectorXd currentPoint = getRobotPose().position;
     VectorXd correctedPoint = correctPoint(currentPoint, getLidarPointsKDTree(getRobotPose().position, Global::param.sensingRadius), Global::param);
+
+    //ROS_INFO_STREAM("Point corrected!");
 
     if (forceUpdate || (Global::graph.getNeighborNodes(correctedPoint, Global::param.radiusCreateNode).size() == 0))
     {
@@ -408,6 +432,8 @@ void updateGraphCall(bool forceUpdate)
             i++;
             cont = cont && (i < Global::graph.nodes.size());
         }
+
+        //ROS_INFO_STREAM("Tested "<<i<<" out of "<<Global::graph.nodes.size());
 
         if (distances.size() > 0)
         {
@@ -568,10 +594,10 @@ int main(int argc, char **argv)
     // Initialize ROS variables
     ros::init(argc, argv, "manager");
     ros::NodeHandle nodeHandler;
-    ros::Publisher aux_pubBodyTwist = nodeHandler.advertise<geometry_msgs::Twist>("/cmd_vel", 1);
+    ros::Publisher aux_pubBodyTwist = nodeHandler.advertise<geometry_msgs::Twist>("b1_gazebo/cmd_vel", 1);
     // ros::Subscriber subPose = nodeHandler.subscribe("/odom/ground_truth", 1000, poseCallback);
-    ros::ServiceClient neighborhClient = nodeHandler.serviceClient<octomap_with_query::neighbor_points>("/octomap_query_node/neighbor_points");
-    ros::ServiceClient frontierClient = nodeHandler.serviceClient<octomap_with_query::frontier_points>("/octomap_query_node/frontier_points");
+    ros::ServiceClient neighborhClient = nodeHandler.serviceClient<octomap_with_query::neighbor_points>("b1_gazebo/octomap_query_node/neighbor_points");
+    ros::ServiceClient frontierClient = nodeHandler.serviceClient<octomap_with_query::frontier_points>("b1_gazebo/octomap_query_node/frontier_points");
     tf::TransformListener tflistener;
     tf::StampedTransform transform;
     ros::Rate rate(100);

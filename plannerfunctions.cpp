@@ -270,7 +270,7 @@ namespace CBFCirc
         do
         {
             currentDist = rdr.halfSqDistance;
-            pointCorrected += param.stepCorrectPoint * rdr.gradDistance;
+            pointCorrected += param.stepCorrectPoint * rdr.gradDistance.normalized();
             rdr = computeDistRadial(neighborPoints, pointCorrected, param.smoothingParam);
             newDist = rdr.halfSqDistance;
             k++;

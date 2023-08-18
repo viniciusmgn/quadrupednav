@@ -99,11 +99,11 @@ namespace CBFCirc
                 debug_addMessage(counter, "Path " + pathName + " timeout! Error to path was " + errorToGoal + " but minimum is " + minimumError);
             }
         }
-        if (Global::generateManyPathResult.atLeastOnePathReached)
-        {
-            if (((Global::currentOmega - Global::generateManyPathResult.bestOmega).norm() > VERYSMALLNUMBER))
-                debug_addMessage(counter, "Changed sense of circulation");
-        }
+        // if (Global::generateManyPathResult.atLeastOnePathReached)
+        // {
+        //     if (((Global::currentOmega - Global::generateManyPathResult.bestOmega).norm() > VERYSMALLNUMBER))
+        //         debug_addMessage(counter, "Changed sense of circulation");
+        // }
     }
 
     void debug_printAlgStateToMatlab(ofstream *f)
