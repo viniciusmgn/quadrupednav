@@ -201,7 +201,7 @@ vector<VectorXd> getLidarPointsSource(VectorXd position, double radius)
         {
             double z = srv.response.neighbors[fact * i].z;
             //if (z >= Global::param.constantHeight - 0.3 && z <= Global::param.constantHeight + 0.3)
-            if (z >= Global::measuredHeight - 0.1 && z <= Global::measuredHeight + 0.1)
+            if (z >= Global::measuredHeight - 0.10 && z <= Global::measuredHeight + 0.10)
             {
                 VectorXd newPoint = VectorXd::Zero(3);
                 newPoint << srv.response.neighbors[fact * i].x, srv.response.neighbors[fact * i].y, Global::param.constantHeight;
@@ -220,7 +220,6 @@ vector<VectorXd> getLidarPointsKDTree(VectorXd position, double radius)
 
     if (Global::pointsKDTree.size() > 0)
     {
-        //Global::mutexUpdateKDTree.lock();
 
         vector<double> positionV(3);
         positionV[0] = position[0];
@@ -236,7 +235,6 @@ vector<VectorXd> getLidarPointsKDTree(VectorXd position, double radius)
             points.push_back(ptemp);
         }
 
-        //Global::mutexUpdateKDTree.unlock();
     }
 
     return points;
@@ -277,10 +275,13 @@ void lowLevelMovement()
     }
 }
 
-void replanOmegaCall()
+void replanCommitedPathCall()
 {
-    Global::mutexReplanOmega.lock();
+    Global::mutexReplanCommitedPath.lock();
+    updateKDTreeCall();
     Global::mutexUpdateKDTree.lock_shared();
+
+    
 
     Global::generateManyPathResult = CBFCircPlanMany(getRobotPose(), Global::currentGoalPosition, getLidarPointsKDTree,
                                                      Global::param.maxTimePlanner, Global::param.plannerOmegaPlanReachError, 
@@ -322,11 +323,10 @@ void replanOmegaCall()
     else
     {
         // Transition condition
+        ROS_INFO_STREAM("Failed to find path... plan to explore frontier!");
         debug_addMessage(counter, "Failed to find path... plan to explore frontier!");
 
         Global::planningState = MotionPlanningState::planning;
-        //Global::currentGoalPosition = getRobotPose().position;
-        //Global::currentOmega = Matrix3d::Zero(3, 3);
         vector<vector<VectorXd>> frontierPoints = getFrontierPoints();
         while (frontierPoints.size() == 0)
         {
@@ -335,9 +335,7 @@ void replanOmegaCall()
             frontierPoints = getFrontierPoints();
         }
 
-        ROS_INFO_STREAM("Updating graph for planning");
-        updateGraphCall(true);
-        ROS_INFO_STREAM("Ended updating graph");
+        updateGraphCall(false);
         Global::mutexUpdateGraph.lock();
         NewExplorationPointResult nepr = Global::graph.getNewExplorationPoint(getRobotPose(), getLidarPointsKDTree,
                                                                               frontierPoints, Global::param);
@@ -353,7 +351,6 @@ void replanOmegaCall()
             Global::currentIndexPath = 0;
             Global::explorationPosition = nepr.bestExplorationPosition;
             Global::currentGoalPosition = Global::currentPath[0]->nodeOut->position;
-            //Global::planningState = MotionPlanningState::pathToExploration;
 
             // DEBUG
             debug_addMessage(counter, "Store event: beginning to travel path");
@@ -361,10 +358,10 @@ void replanOmegaCall()
             debug_Store(counter);
             // DEBUG
 
-            Global::mutexReplanOmega.unlock();
+            Global::mutexReplanCommitedPath.unlock();
             Global::mutexUpdateKDTree.unlock_shared();
-            replanOmegaCall();
-            Global::mutexReplanOmega.lock();
+            replanCommitedPathCall();
+            Global::mutexReplanCommitedPath.lock();
             Global::mutexUpdateKDTree.lock_shared();
 
             Global::planningState = MotionPlanningState::pathToExploration;
@@ -378,30 +375,27 @@ void replanOmegaCall()
         }
     }
     Global::mutexUpdateKDTree.unlock_shared();
-    Global::mutexReplanOmega.unlock();
+    Global::mutexReplanCommitedPath.unlock();
 }
 
-void replanOmega()
+void replanCommitedPath()
 {
     while (ros::ok() && Global::continueAlgorithm)
         if (Global::measured && (Global::generalCounter % Global::param.freqReplanPath == 0))
-            replanOmegaCall();
+            replanCommitedPathCall();
 }
 
 void updateGraphCall(bool forceUpdate)
 {
 
-    //ROS_INFO_STREAM("Waiting for lock...");
+
 
     Global::mutexUpdateGraph.lock();
     Global::mutexUpdateKDTree.lock_shared();
 
-    //ROS_INFO_STREAM("Correcting point...");
-
     VectorXd currentPoint = getRobotPose().position;
     VectorXd correctedPoint = correctPoint(currentPoint, getLidarPointsKDTree(getRobotPose().position, Global::param.sensingRadius), Global::param);
 
-    //ROS_INFO_STREAM("Point corrected!");
 
     if (forceUpdate || (Global::graph.getNeighborNodes(correctedPoint, Global::param.radiusCreateNode).size() == 0))
     {
@@ -433,7 +427,6 @@ void updateGraphCall(bool forceUpdate)
             cont = cont && (i < Global::graph.nodes.size());
         }
 
-        //ROS_INFO_STREAM("Tested "<<i<<" out of "<<Global::graph.nodes.size());
 
         if (distances.size() > 0)
         {
@@ -544,8 +537,7 @@ void transitionAlg()
                 Global::currentIndexPath = -1;
                 Global::explorationPosition = VectorXd::Zero(3);
 
-                updateKDTreeCall();
-                replanOmegaCall();
+                replanCommitedPathCall();
 
                 // DEBUG
                 debug_addMessage(Global::generalCounter, "Reached exploration point. Going to global target!");
@@ -559,8 +551,7 @@ void transitionAlg()
                     Global::planningState = MotionPlanningState::goingToExplore;
                     Global::currentGoalPosition = Global::explorationPosition;
 
-                    updateKDTreeCall();
-                    replanOmegaCall();
+                    replanCommitedPathCall();
 
                     // DEBUG
                     debug_addMessage(Global::generalCounter, "Reached last point on the path. Going to explore a frontier...");
@@ -595,7 +586,6 @@ int main(int argc, char **argv)
     ros::init(argc, argv, "manager");
     ros::NodeHandle nodeHandler;
     ros::Publisher aux_pubBodyTwist = nodeHandler.advertise<geometry_msgs::Twist>("b1_gazebo/cmd_vel", 1);
-    // ros::Subscriber subPose = nodeHandler.subscribe("/odom/ground_truth", 1000, poseCallback);
     ros::ServiceClient neighborhClient = nodeHandler.serviceClient<octomap_with_query::neighbor_points>("b1_gazebo/octomap_query_node/neighbor_points");
     ros::ServiceClient frontierClient = nodeHandler.serviceClient<octomap_with_query::frontier_points>("b1_gazebo/octomap_query_node/frontier_points");
     tf::TransformListener tflistener;
@@ -621,7 +611,7 @@ int main(int argc, char **argv)
 
     // Initialize some threads
     std::thread lowLevelMovementThread = thread(lowLevelMovement);
-    std::thread replanOmegaThread = thread(replanOmega);
+    std::thread replanOmegaThread = thread(replanCommitedPath);
     std::thread updateGraphThread = thread(updateGraph);
     std::thread updateKDTreeThread = thread(updateKDTree);
     std::thread transitionAlgThread = thread(transitionAlg);
@@ -648,11 +638,7 @@ int main(int argc, char **argv)
                 {
                     ROS_INFO_STREAM("---------GOING TO EXPLORE--------");
                 }
-                // ROS_INFO_STREAM("counter = " << Global::generalCounter);
-                // ROS_INFO_STREAM("linvelocity = " << printVector(Global::desLinVelocity));
-                // ROS_INFO_STREAM("angvelocity = " << Global::desAngVelocity);
                 ROS_INFO_STREAM("distobs = " << Global::distance);
-                // ROS_INFO_STREAM("safety = " << Global::safety);
                 ROS_INFO_STREAM("distgoal = " << (getRobotPose().position - Global::currentGoalPosition).norm());
                 ROS_INFO_STREAM("omega = " << getMatrixName(Global::currentOmega));
             }

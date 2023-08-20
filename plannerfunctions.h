@@ -28,8 +28,8 @@ namespace CBFCirc
         double gainRobotYaw = 4.0;         // 2.0 4.0
         double gainTargetController = 0.4; // 0.2
         double alphaCBFPositive = 1.0;
-        double alphaCBFNegative = 6;   // 7.5
-        double distanceMinBeta = 0.40; // 0.5 0.3 0.4 0.50
+        double alphaCBFNegative = 6.0;   // 7.5 //6
+        double distanceMinBeta = 0.10; // 0.5 0.3 0.4 0.50 0.30
         double maxVelCircBeta = 1.25;  // 0.5 0.5
         double maxTotalVel = 0.3;
         double distanceMarginPlan = 0.05; // 0.20
@@ -47,7 +47,7 @@ namespace CBFCirc
         int freqUpdateKDTree = 50; // 100
         int freqDisplayMessage = 50;
 
-        double noMaxIterationsCorrectPoint = 20;
+        double noMaxIterationsCorrectPoint = 40;
         double stepCorrectPoint = 0.1;
         double radiusCreateNode = 1.5; // 0.8
         double maxTimePlanConnectNode = 50;
@@ -57,8 +57,20 @@ namespace CBFCirc
 
         int sampleStorePath = 15;
 
+
+        int noMaxOptimizePath = 10;
+        double upsampleMinPos = 0.01; //0.01
+        double upsampleMinOri = 0.01; //0.01
+        double vectorFieldAlpha = 2.0;
+        double correctPathStep = 0.15;
+        double distCutoffCorrect = 0.6;
+        int generateSimplePathDiv = 100;
+        double distPathFree = 0.05;
+        int noIterationsCorrectPath = 7;
+        int filterWindow = 10;
+
         double maxTimeSampleExploration = 80;
-        double deltaTimeSampleExploration = 0.5;
+        double deltaTimeSampleExploration = 1.0; //0.5
         int noTriesClosestPoint = 5;
         //VectorXd globalTargetPosition = vec3d(7, 0, -0.1725); // vec3d(7, 0, -0.1725)
         //VectorXd globalTargetPosition = vec3d(-7, 1, -0.1725);

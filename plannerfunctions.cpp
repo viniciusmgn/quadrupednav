@@ -97,7 +97,7 @@ namespace CBFCirc
 
         VectorXd ud = vectorVertStack(vd, 0);
 
-        MatrixXd H = 2 * (H1 + H2); //2 * (H1 + 4 * H2)
+        MatrixXd H = 2 * (H1 + H2); // 2 * (H1 + 4 * H2)
         VectorXd f = -2 * ud;
         MatrixXd A = MatrixXd::Zero(1, 3);
         A << dr.gradSafetyPosition[0], dr.gradSafetyPosition[1], dr.gradSafetyOrientation;
@@ -153,13 +153,14 @@ namespace CBFCirc
         RobotPose pose = startingPose;
         double time = 0;
         bool cont = true;
-  
 
         gpr.pathState = PathState::sucess;
         gpr.path = {};
         gpr.pathGradSafetyPosition = {};
         gpr.pathGradSafetyOrientation = {};
         gpr.pathDistance = {};
+
+        double dt;
 
         while (cont)
         {
@@ -171,9 +172,20 @@ namespace CBFCirc
                 gpr.pathGradSafetyOrientation.push_back(cccr.distanceResult.gradSafetyOrientation);
                 gpr.pathDistance.push_back(cccr.distanceResult.distance);
 
-                pose.position += cccr.linearVelocity * deltaTime;
-                pose.orientation += cccr.angularVelocity * deltaTime;
-                time += deltaTime;
+                if(cccr.distanceResult.distance>0.05)
+                    dt = deltaTime;
+                else 
+                {
+                    if(cccr.distanceResult.distance>0)
+                        dt = deltaTime/2;
+                    else
+                        dt = deltaTime/4; 
+                }   
+
+
+                pose.position += cccr.linearVelocity * dt;
+                pose.orientation += cccr.angularVelocity * dt;
+                time += dt;
 
                 cont = (gpr.path[gpr.path.size() - 1].position - targetPosition).norm() > reachpointError;
             }
@@ -286,7 +298,7 @@ namespace CBFCirc
         else
         {
             int midIndex = (int)(finalIndex + initialIndex) / 2;
-            if (computeDist(querier(path[midIndex].position, param.sensingRadius), path[midIndex], param).distance < 0.05)
+            if (computeDist(querier(path[midIndex].position, param.sensingRadius), path[midIndex], param).distance < param.distPathFree)
                 return false;
             else
                 return pathFree(path, querier, initialIndex, midIndex, param) && pathFree(path, querier, midIndex, finalIndex, param);
@@ -299,7 +311,7 @@ namespace CBFCirc
         RobotPose endingPose = originalPath[finalIndex];
         vector<RobotPose> simplePath = {};
 
-        int N = 100;
+        int N = param.generateSimplePathDiv;
         for (int i = 0; i < N; i++)
         {
             RobotPose intPose;
@@ -322,7 +334,8 @@ namespace CBFCirc
 
         for (int i = 0; i < originalPath.size() - 1; i++)
         {
-            double delta = (originalPath[i + 1].position - originalPath[i].position).norm() + abs(originalPath[i + 1].orientation - originalPath[i].orientation);
+            double delta = (originalPath[i + 1].position - originalPath[i].position).norm() +
+                           abs(originalPath[i + 1].orientation - originalPath[i].orientation);
             pathLength.push_back(pathLength[i] + delta);
             modifiedPath.push_back(originalPath[i + 1]);
         }
@@ -333,17 +346,15 @@ namespace CBFCirc
         {
             double fat = 16 * pow(pathLength[i] * (1 - pathLength[i]), 2);
 
-            // fat = 4 * pathLength[i] * (1 - pathLength[i]);
-
-            for (int j = 0; j < 7; j++)
+            for (int j = 0; j < param.noIterationsCorrectPath; j++)
             {
                 DistanceResult dr = computeDist(querier(modifiedPath[i].position, param.sensingRadius), modifiedPath[i], param);
 
-                fat = sqrt(1.0 + VERYSMALLNUMBER - pathLength[i]) * max(0.0, 1.0 - dr.distance / 0.60);
+                fat = sqrt(1.0 + VERYSMALLNUMBER - pathLength[i]) * max(0.0, 1.0 - dr.distance / param.distCutoffCorrect);
 
                 double norm = sqrt(dr.gradSafetyPosition.squaredNorm() + pow(dr.gradSafetyOrientation, 2)) + VERYSMALLNUMBER;
-                modifiedPath[i].position += fat * 0.15 * dr.gradSafetyPosition / norm;
-                modifiedPath[i].orientation += fat * 0.15 * dr.gradSafetyOrientation / norm;
+                modifiedPath[i].position += fat * param.correctPathStep * dr.gradSafetyPosition / norm;
+                modifiedPath[i].orientation += fat * param.correctPathStep * dr.gradSafetyOrientation / norm;
             }
         }
 
@@ -354,11 +365,13 @@ namespace CBFCirc
     {
 
         vector<RobotPose> path = {};
+
+        // Reduze size
         int indexPath = -1;
         int currentIndex = originalPath.size() - 1;
-        int N = 0;
+        int i = 0;
 
-        while (indexPath != originalPath.size() - 1 && N < 10)
+        while (indexPath != originalPath.size() - 1 && i < param.noMaxOptimizePath)
         {
             vector<RobotPose> tryPath = generateSimplePath(originalPath, querier, 0, currentIndex, param);
             if (tryPath.size() > 0)
@@ -370,7 +383,7 @@ namespace CBFCirc
             else
                 currentIndex = currentIndex / 2;
 
-            N++;
+            i++;
         }
 
         vector<RobotPose> optimizedPath = {};
@@ -381,7 +394,48 @@ namespace CBFCirc
         for (int i = indexPath + 1; i < originalPath.size(); i++)
             optimizedPath.push_back(originalPath[i]);
 
-        return upsample(correctPath(optimizedPath, querier, param), 0.01, 0.01);
+        // Correct path
+        optimizedPath = correctPath(optimizedPath, querier, param);
+
+        // Upsample:
+        optimizedPath = upsample(optimizedPath, param.upsampleMinPos, param.upsampleMinOri);
+
+        // Filter
+        vector<RobotPose> finalPath = {};
+
+        for (int i = 0; i < optimizedPath.size(); i++)
+        {
+            VectorXd pos = VectorXd::Zero(3);
+            double ori = 0;
+            int lasti = optimizedPath.size()-1;
+            int jmin = i < param.filterWindow ? 0 : i - param.filterWindow;
+            int jmax = i > lasti-param.filterWindow? lasti: i+param.filterWindow;
+            double N = (double)(jmax - jmin) + 1;
+            for (int j = jmin; j <= jmax; j++)
+            {
+                pos += optimizedPath[j].position;
+                ori += optimizedPath[j].orientation;
+            }
+            pos = pos / N;
+            ori = ori / N;
+
+            RobotPose pose;
+            pose.position = pos;
+            pose.orientation = ori;
+            finalPath.push_back(pose);
+        }
+
+        //Test:
+        // for(int i=0; i<finalPath.size(); i++)
+        // {
+        //     DistanceResult dr = computeDist(querier(finalPath[i].position, param.sensingRadius), finalPath[i], param);
+        //     if( dr.distance < 0)
+        //     {
+        //         int ggg=0;
+        //     }
+        // }
+
+        return finalPath;
     }
 
     vector<RobotPose> upsample(vector<RobotPose> path, double minDistPos, double minDistOri)
@@ -420,8 +474,7 @@ namespace CBFCirc
 
         for (int i = 0; i < path.size(); i++)
         {
-            dminTemp = sqrt((path[i].position - pose.position).squaredNorm() + (1.0 - cos(path[i].orientation - pose.orientation)));
-            // dminTemp = sqrt((path[i].position - pose.position).squaredNorm());
+            dminTemp = sqrt(0.5 * (path[i].position - pose.position).squaredNorm() + (1.0 - cos(path[i].orientation - pose.orientation)));
             if (dminTemp < dmin)
             {
                 dmin = dminTemp;
@@ -461,7 +514,7 @@ namespace CBFCirc
         T = T / (T.norm() + VERYSMALLNUMBER);
 
         // Compute the G and H gains
-        double G = (2 / M_PI) * atan(2.0 * sqrt(dmin));
+        double G = (2 / M_PI) * atan(param.vectorFieldAlpha * sqrt(dmin));
         double H = sqrt(1 - (1 - VERYSMALLNUMBER) * G * G);
 
         // Compute the final vector field:
@@ -469,6 +522,8 @@ namespace CBFCirc
 
         vfr.linearVelocity = vec3d(v[0], v[1], 0);
         vfr.angularVelocity = v[2];
+
+        //ROS_INFO_STREAM("proj:" << (N.transpose() * T)[0]);
 
         return vfr;
     }

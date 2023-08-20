@@ -67,10 +67,7 @@ namespace CBFCirc
         dfd.explorationPosition = Global::explorationPosition;
         dfd.commitedPath = Global::commitedPath;
 
-        if(dfd.generalCounter==0)
-        {
-            int ggg=0;
-        }
+        // dfd.rawPoints = getLidarPointsSource_debug(getRobotPose().position, Global::param.sensingRadius);
 
         Global::dataForDebug.push_back(dfd);
     }
@@ -99,11 +96,6 @@ namespace CBFCirc
                 debug_addMessage(counter, "Path " + pathName + " timeout! Error to path was " + errorToGoal + " but minimum is " + minimumError);
             }
         }
-        // if (Global::generateManyPathResult.atLeastOnePathReached)
-        // {
-        //     if (((Global::currentOmega - Global::generateManyPathResult.bestOmega).norm() > VERYSMALLNUMBER))
-        //         debug_addMessage(counter, "Changed sense of circulation");
-        // }
     }
 
     void debug_printAlgStateToMatlab(ofstream *f)
@@ -145,6 +137,8 @@ namespace CBFCirc
         *f << "messages = processMessageTable(readtable([dirData '/messages.csv']),generalCounter);" << std::endl;
         *f << "commitedPos = processCell(load([dirData '/commitedPos.csv']));" << std::endl;
         *f << "commitedOri = processCell(load([dirData '/commitedOri.csv']));" << std::endl;
+
+        // *f << "debug_rawPoints = processCell(load([dirData '/debug_rawPoints.csv']));" << std::endl;
 
         // Write planned paths
         vector<string> names = {};
@@ -459,15 +453,11 @@ namespace CBFCirc
         f->flush();
         f->close();
 
-        // WRITE: messages
-        f->open("/home/vinicius/Desktop/matlab/unitree_planning/" + fname + "/messages.csv", ofstream::trunc);
-        for (int j = 0; j < Global::messages.size(); j++)
-            *f << Global::messages[j] << std::endl;
-        f->flush();
-        f->close();
+
 
         // WRITE: commited position and orientation
         double fat = 3 * Global::param.sampleStorePath;
+        //fat = 1;
 
         f->open("/home/vinicius/Desktop/matlab/unitree_planning/" + fname + "/commitedPos.csv", ofstream::trunc);
         tempVectorVector = {};
@@ -500,6 +490,23 @@ namespace CBFCirc
         printVectorVectorsToCSV(f, tempVectorVector, 1);
         f->flush();
         f->close();
+
+        //debug fat
+        // fat = 1;
+
+        // f->open("/home/vinicius/Desktop/matlab/unitree_planning/" + fname + "/debug_rawPoints.csv", ofstream::trunc);
+        // tempVectorVector = {};
+        // for (int i = 0; i < Global::dataForDebug.size(); i++)
+        // {
+        //     tempVector = {};
+        //     for (int j = 0; j < Global::dataForDebug[i].rawPoints.size() / fat; j++)
+        //         tempVector.push_back(Global::dataForDebug[i].rawPoints[fat * j]);
+
+        //     tempVectorVector.push_back(tempVector);
+        // }
+        // printVectorVectorsToCSV(f, tempVectorVector, 3);
+        // f->flush();
+        // f->close();
 
         // WRITE: planned paths
         fat = Global::param.sampleStorePath;
@@ -589,6 +596,12 @@ namespace CBFCirc
             f->close();
         }
 
+        // WRITE: messages
+        f->open("/home/vinicius/Desktop/matlab/unitree_planning/" + fname + "/messages.csv", ofstream::trunc);
+        for (int j = 0; j < Global::messages.size(); j++)
+            *f << Global::messages[j] << std::endl;
+        f->flush();
+        f->close();
 
     }
 

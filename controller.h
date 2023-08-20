@@ -75,7 +75,7 @@ public:
     inline static Kdtree::KdTree *kdTree;
     inline static vector<VectorXd> pointsKDTree = {};
     inline static shared_timed_mutex mutexUpdateKDTree;
-    inline static mutex mutexReplanOmega;
+    inline static mutex mutexReplanCommitedPath;
     inline static mutex mutexUpdateGraph;
     inline static vector<DataForDebug> dataForDebug = {};
     inline static Parameters param;
@@ -89,12 +89,6 @@ public:
     inline static vector<RobotPose> commitedPath;
     inline static double measuredHeight;
 
-
-
-    //inline static bool replanOmegaWorking = false;
-    //inline static bool updateGraphWorking = false;
-    //inline static bool updateKDTreeWorking = false;
-    //inline static bool transitionAlgWorking = false;
 };
 
 
@@ -105,3 +99,5 @@ vector<VectorXd> getLidarPointsKDTree(VectorXd position, double radius);
 vector<VectorXd> getLidarPointsSource(VectorXd position, double radius);
 vector<vector<VectorXd>> getFrontierPoints();
 void updateGraphCall(bool forceUpdate);
+void updateKDTreeCall();
+

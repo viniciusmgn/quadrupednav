@@ -48,6 +48,8 @@ namespace CBFCirc
         VectorXd explorationPosition;
         vector<RobotPose> commitedPath;
 
+        vector<VectorXd> rawPoints = {};
+
 
         //VectorXd bconstraint;
     };
