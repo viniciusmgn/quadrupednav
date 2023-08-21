@@ -505,6 +505,10 @@ namespace CBFCirc
         double G = (2 / M_PI) * atan(param.vectorFieldAlpha * sqrt(dmin));
         double H = sqrt(1 - (1 - VERYSMALLNUMBER) * G * G);
 
+        // std::cout << "G:" << std::endl << G << std::endl;
+        // std::cout << "H" << std::endl << H << std::endl;
+        // std::cout << "Calc" << std::endl << (N.transpose() * T)[0] << std::endl;
+
         // Compute the final vector field:
         VectorXd v = param.maxTotalVel * (0.5 * G * N + H * T);
 

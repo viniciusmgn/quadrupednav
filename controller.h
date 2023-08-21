@@ -3,8 +3,9 @@
 #include <fstream>
 #include <sstream>
 
-#include <ros/ros.h>
-#include <tf/transform_listener.h>
+#include <rclcpp/rclcpp.hpp>
+// #include <ros/ros.h>
+// #include <tf/transform_listener.h>
 
 #include <iostream>
 #include <eigen3/Eigen/Core>
@@ -17,24 +18,21 @@
 #include <functional>
 #include <boost/multi_array.hpp>
 #include <typeinfo>
-#include <tf/transform_listener.h>
-#include <geometry_msgs/Twist.h>
-#include <nav_msgs/Odometry.h>
+// #include <tf/transform_listener.h>
+// #include <geometry_msgs/Twist.h>
+// #include <nav_msgs/Odometry.h>
 #include <boost/filesystem.hpp>
 #include <mutex>
 #include <shared_mutex>
-#include "std_msgs/String.h"
+// #include "std_msgs/String.h"
 #include "./kdtree-cpp-master/kdtree.hpp"
-
-
-
 
 #include "utils.h"
 #include "utils.cpp"
 #include "plannerfunctions.h"
 #include "plannerfunctions.cpp"
-#include "debugfunctions.h"
-#include "debugfunctions.cpp"
+// #include "debugfunctions.h"
+// #include "debugfunctions.cpp"
 #include "graph.h"
 #include "graph.cpp"
 // #include <thread>
@@ -45,9 +43,6 @@ using namespace CBFCirc;
 
 // STRUCT AND CLASSES
 
-
-
-
 class Global
 {
 public:
@@ -56,7 +51,7 @@ public:
     inline static double orientation = 0;
     inline static VectorXd desLinVelocity = VectorXd::Zero(3);
     inline static double desAngVelocity = 0;
-    inline static ros::Publisher *pubBodyTwist = NULL;
+    // inline static ros::Publisher *pubBodyTwist = NULL;
     inline static int generalCounter = 0;
     inline static bool measured = false;
     inline static double distance = 0;
@@ -77,21 +72,19 @@ public:
     inline static shared_timed_mutex mutexUpdateKDTree;
     inline static mutex mutexReplanCommitedPath;
     inline static mutex mutexUpdateGraph;
-    inline static vector<DataForDebug> dataForDebug = {};
+    // inline static vector<DataForDebug> dataForDebug = {};
     inline static Parameters param;
     inline static vector<Edge *> currentPath = {};
     inline static int currentIndexPath = -1;
     inline static VectorXd explorationPosition = VectorXd::Zero(3);  
-    inline static ros::ServiceClient* neighborhClient;
-    inline static ros::ServiceClient* frontierClient;
-    inline static tf::TransformListener* tflistener;
-    inline static tf::StampedTransform* transform;
+    // inline static ros::ServiceClient* neighborhClient;
+    // inline static ros::ServiceClient* frontierClient;
+    // inline static tf::TransformListener* tflistener;
+    // inline static tf::StampedTransform* transform;
     inline static vector<RobotPose> commitedPath;
     inline static double measuredHeight;
 
 };
-
-
 
 double getTime();
 RobotPose getRobotPose();
@@ -100,4 +93,3 @@ vector<VectorXd> getLidarPointsSource(VectorXd position, double radius);
 vector<vector<VectorXd>> getFrontierPoints();
 void updateGraphCall();
 void updateKDTreeCall();
-

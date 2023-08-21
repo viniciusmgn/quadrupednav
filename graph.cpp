@@ -150,7 +150,7 @@ namespace CBFCirc
         bool triedAll = false;
         int k = 0;
 
-        ROS_INFO_STREAM("Start planning. Trying to find entry point.");
+        // ROS_INFO_STREAM("Start planning. Trying to find entry point.");
         auto start = high_resolution_clock::now();
         do
         {
@@ -164,27 +164,27 @@ namespace CBFCirc
         } while (!found && !triedAll);
         auto stop = high_resolution_clock::now();
         auto duration = duration_cast<microseconds>(stop - start);
-        ROS_INFO_STREAM("Finished in "<<((double) duration.count()/1000000.0)<<" seconds!");
+        // ROS_INFO_STREAM("Finished in "<<((double) duration.count()/1000000.0)<<" seconds!");
 
         if (!found)
         {
-            ROS_INFO_STREAM("Failed to go to ANY point in the graph!");
+            // ROS_INFO_STREAM("Failed to go to ANY point in the graph!");
             sntr.success = false;
         }
         else
         {
-            ROS_INFO_STREAM("Success to go to a point of the graph ("<<k<<" out of "<<closestNodesToCurrent.size()<<")");
+            // ROS_INFO_STREAM("Success to go to a point of the graph ("<<k<<" out of "<<closestNodesToCurrent.size()<<")");
             sntr.success = true;
         }
             
 
-        ROS_INFO_STREAM("Starting frontier exploration (Type A)..." << frontier.size() << " clusters found");
+        // ROS_INFO_STREAM("Starting frontier exploration (Type A)..." << frontier.size() << " clusters found");
 
         if (sntr.success)
         {
             for (int i = 0; i < frontier.size(); i++)
             {
-                ROS_INFO_STREAM("Computing for frontier point: "<<i);
+                // ROS_INFO_STREAM("Computing for frontier point: "<<i);
                 double bestDist = -VERYBIGNUMBER;
                 double tempDist;
                 VectorXd bestPoint = VectorXd::Zero(3);
@@ -271,11 +271,11 @@ namespace CBFCirc
                 sntr.success = true;
 
 
-                ROS_INFO_STREAM("SUCCESS: Point found!");
+                // ROS_INFO_STREAM("SUCCESS: Point found!");
             }
             else
             {
-                ROS_INFO_STREAM("ERROR: No point found using Type A algorithm...");
+                // ROS_INFO_STREAM("ERROR: No point found using Type A algorithm...");
                 sntr.success = false;
             }
         }
