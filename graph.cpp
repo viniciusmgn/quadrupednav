@@ -222,7 +222,6 @@ namespace CBFCirc
                             bestValue = gmpr1.bestPathSize;
                             bestOmega = gmpr1.bestOmega;
                             bestNodeToExploration = nodeTry;
-                            //cont = gmpr1.bestPathSize > 1.5*(poseTry.position-bestPoint).norm();
                         }
                         j++;
                         cont = cont && (j<jmax);

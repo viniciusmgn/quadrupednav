@@ -55,7 +55,8 @@ namespace CBFCirc
 
         double minDistFilterKDTree = 0.15; // 0.3
 
-        int sampleStorePath = 15;
+        int sampleFactorStorePath = 15;
+        int sampleFactorLidarSource = 5;
 
 
         int noMaxOptimizePath = 10;

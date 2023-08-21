@@ -67,8 +67,6 @@ namespace CBFCirc
         dfd.explorationPosition = Global::explorationPosition;
         dfd.commitedPath = Global::commitedPath;
 
-        // dfd.rawPoints = getLidarPointsSource_debug(getRobotPose().position, Global::param.sensingRadius);
-
         Global::dataForDebug.push_back(dfd);
     }
 
@@ -137,8 +135,6 @@ namespace CBFCirc
         *f << "messages = processMessageTable(readtable([dirData '/messages.csv']),generalCounter);" << std::endl;
         *f << "commitedPos = processCell(load([dirData '/commitedPos.csv']));" << std::endl;
         *f << "commitedOri = processCell(load([dirData '/commitedOri.csv']));" << std::endl;
-
-        // *f << "debug_rawPoints = processCell(load([dirData '/debug_rawPoints.csv']));" << std::endl;
 
         // Write planned paths
         vector<string> names = {};
@@ -456,7 +452,7 @@ namespace CBFCirc
 
 
         // WRITE: commited position and orientation
-        double fat = 3 * Global::param.sampleStorePath;
+        double fat = 3 * Global::param.sampleFactorStorePath;
         //fat = 1;
 
         f->open("/home/vinicius/Desktop/matlab/unitree_planning/" + fname + "/commitedPos.csv", ofstream::trunc);
@@ -491,25 +487,8 @@ namespace CBFCirc
         f->flush();
         f->close();
 
-        //debug fat
-        // fat = 1;
-
-        // f->open("/home/vinicius/Desktop/matlab/unitree_planning/" + fname + "/debug_rawPoints.csv", ofstream::trunc);
-        // tempVectorVector = {};
-        // for (int i = 0; i < Global::dataForDebug.size(); i++)
-        // {
-        //     tempVector = {};
-        //     for (int j = 0; j < Global::dataForDebug[i].rawPoints.size() / fat; j++)
-        //         tempVector.push_back(Global::dataForDebug[i].rawPoints[fat * j]);
-
-        //     tempVectorVector.push_back(tempVector);
-        // }
-        // printVectorVectorsToCSV(f, tempVectorVector, 3);
-        // f->flush();
-        // f->close();
-
         // WRITE: planned paths
-        fat = Global::param.sampleStorePath;
+        fat = Global::param.sampleFactorStorePath;
 
         for (int k = 0; k < names.size(); k++)
         {

@@ -92,7 +92,7 @@ namespace CBFCirc
         MatrixXd H1 = MatrixXd::Zero(3, 3);
         H1(0, 0) = 1;
         H1(1, 1) = 1;
-        H1(2, 2) = min(max(dr.distance, 0.0), 5.0);
+        H1(2, 2) = min(max(dr.distance, 0.0), param.sensingRadius);
         MatrixXd H2 = restvw.transpose() * restvw;
 
         VectorXd ud = vectorVertStack(vd, 0);
@@ -425,16 +425,6 @@ namespace CBFCirc
             finalPath.push_back(pose);
         }
 
-        //Test:
-        // for(int i=0; i<finalPath.size(); i++)
-        // {
-        //     DistanceResult dr = computeDist(querier(finalPath[i].position, param.sensingRadius), finalPath[i], param);
-        //     if( dr.distance < 0)
-        //     {
-        //         int ggg=0;
-        //     }
-        // }
-
         return finalPath;
     }
 
@@ -458,8 +448,6 @@ namespace CBFCirc
         }
 
         upsampledPath.push_back(path[path.size() - 1]);
-
-        // ROS_INFO_STREAM("samplingRatio " << (upsampledPath.size()/path.size()));
 
         return upsampledPath;
     }
@@ -523,7 +511,6 @@ namespace CBFCirc
         vfr.linearVelocity = vec3d(v[0], v[1], 0);
         vfr.angularVelocity = v[2];
 
-        //ROS_INFO_STREAM("proj:" << (N.transpose() * T)[0]);
 
         return vfr;
     }

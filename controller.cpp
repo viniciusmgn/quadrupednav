@@ -98,11 +98,10 @@ void updatePose(const ros::TimerEvent &e)
     try
     {
         Global::tflistener->lookupTransform("b1_gazebo/fast_lio", "b1_gazebo/base",
-                                            ros::Time(0), *Global::transform); //base_link
+                                            ros::Time(0), *Global::transform); 
 
         double px = Global::transform->getOrigin().x();
         double py = Global::transform->getOrigin().y();
-        // double pz = Global::transform->getOrigin().z();
         double pz = Global::param.constantHeight;
         double x = Global::transform->getRotation().x();
         double y = Global::transform->getRotation().y();
@@ -193,18 +192,16 @@ vector<VectorXd> getLidarPointsSource(VectorXd position, double radius)
     srv.request.query.y = position[1];
     srv.request.query.z = position[2];
 
-    int fact = 5;
+    int fact = Global::param.sampleFactorLidarSource;
 
     if (Global::neighborhClient->call(srv))
     {
         for (int i = 0; i < srv.response.neighbors.size() / fact; i++)
         {
             double z = srv.response.neighbors[fact * i].z;
-            //if (z >= Global::param.constantHeight - 0.3 && z <= Global::param.constantHeight + 0.3)
             if (z >= Global::measuredHeight - 0.10 && z <= Global::measuredHeight + 0.10)
             {
-                VectorXd newPoint = VectorXd::Zero(3);
-                newPoint << srv.response.neighbors[fact * i].x, srv.response.neighbors[fact * i].y, Global::param.constantHeight;
+                VectorXd newPoint = vec3d(srv.response.neighbors[fact * i].x, srv.response.neighbors[fact * i].y, Global::param.constantHeight);
                 points.push_back(newPoint);
             }
         }
@@ -292,7 +289,7 @@ void replanCommitedPathCall()
 
     // DEBUG
     int counter = Global::generalCounter;
-    debug_addMessage(counter, "Store event: replanning omega");
+    debug_addMessage(counter, "Store event: replanning commited path");
     debug_generateManyPathsReport(counter);
     debug_Store(counter);
     // DEBUG
@@ -335,7 +332,7 @@ void replanCommitedPathCall()
             frontierPoints = getFrontierPoints();
         }
 
-        updateGraphCall(false);
+        updateGraphCall();
         Global::mutexUpdateGraph.lock();
         NewExplorationPointResult nepr = Global::graph.getNewExplorationPoint(getRobotPose(), getLidarPointsKDTree,
                                                                               frontierPoints, Global::param);
@@ -385,7 +382,7 @@ void replanCommitedPath()
             replanCommitedPathCall();
 }
 
-void updateGraphCall(bool forceUpdate)
+void updateGraphCall()
 {
 
 
@@ -397,7 +394,7 @@ void updateGraphCall(bool forceUpdate)
     VectorXd correctedPoint = correctPoint(currentPoint, getLidarPointsKDTree(getRobotPose().position, Global::param.sensingRadius), Global::param);
 
 
-    if (forceUpdate || (Global::graph.getNeighborNodes(correctedPoint, Global::param.radiusCreateNode).size() == 0))
+    if ((Global::graph.getNeighborNodes(correctedPoint, Global::param.radiusCreateNode).size() == 0))
     {
         vector<double> distances;
         vector<int> indexes;
@@ -454,7 +451,7 @@ void updateGraph()
 {
     while (ros::ok() && Global::continueAlgorithm)
         if (Global::measured && (Global::generalCounter % Global::param.freqUpdateGraph == 0))
-            updateGraphCall(false);
+            updateGraphCall();
 }
 
 void updateKDTreeCall()
